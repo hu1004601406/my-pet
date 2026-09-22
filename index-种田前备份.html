@@ -1,0 +1,3896 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>我的宠物 · 第2步</title>
+<style>
+  * { box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(180deg, #FFF8E1, #FFE0B2);
+    min-height: 100vh;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+
+  .pet-card {
+    /* 从纯白渐变到浅暖色:原来靠舞台那块米色面板衬托白色宠物,
+       面板撤掉后改由卡片本身提供一点色差,纯白的猫才不会「隐身」 */
+    background: linear-gradient(180deg, #FFFFFF 0%, #FFFDF8 42%, #FFF6E9 100%);
+    position: relative;   /* 小游戏浮层要盖满整张卡片,所以卡片得是个「定位参照物」 */
+    border-radius: 24px;
+    padding: 22px 20px;
+    width: 100%;
+    max-width: 380px;
+    box-shadow: 0 10px 30px rgba(255, 152, 0, 0.15);
+    text-align: center;
+  }
+
+  /* ---------- 宠物选择条 ---------- */
+  .pet-picker {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+  .pet-chip {
+    flex: 1;
+    padding: 9px 4px;
+    border-radius: 12px;
+    border: 2px solid transparent;
+    background: #FFF3E0;
+    font-family: inherit;
+    font-size: 13px;
+    color: #6D4C41;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .pet-chip:hover { background: #FFE0B2; }
+  .pet-chip.active {
+    border-color: #FF9800;
+    background: #FFE0B2;
+    font-weight: 600;
+  }
+
+  /* ---------- 宠物舞台:开放舞台,没有框 ---------- */
+  .stage-wrap {
+    position: relative;   /* 让右上角的 Zzz 能绝对定位到宠物上方 */
+  }
+  .pet-stage {
+    position: relative;
+    z-index: 1;              /* 盖在卧室场景之上 */
+    height: 196px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    /* 关键:这里原来是 background:#FFFBF2 + border-radius:20px 的浅色面板,
+       现在改成完全透明 —— 宠物不再被方框框住,而是站在卧室地板上 */
+    background: transparent;
+    padding-bottom: 8px;     /* 让脚底落在地板上,而不是贴死舞台底边 */
+  }
+  /* ---------- 卧室场景 ----------
+     注意:这一层必须放在 .pet-stage 外面!
+     因为 renderPet() 是用 stageEl.innerHTML = ... 整块替换的,
+     装饰如果写在舞台里面,每次换宠物都会被擦掉 */
+  .room {
+    position: absolute;
+    inset: 0;
+    border-radius: 18px;
+    overflow: hidden;
+    pointer-events: none;   /* 场景只负责好看,别挡住点击宠物 */
+    z-index: 0;
+  }
+  /* 墙:占上面 60% */
+  .wall {
+    position: absolute;
+    left: 0; right: 0; top: 0;
+    height: 60%;
+    background: linear-gradient(180deg, #F9EDDB 0%, #F2E1C8 100%);
+  }
+  /* 地板:占下面 40%,木色 + 竖向木缝 */
+  .floor {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 40%;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.35) 0%, rgba(150, 108, 58, 0.10) 100%),
+      repeating-linear-gradient(90deg, #E7CEA8 0 39px, #D9BA8C 39px 41px);
+    border-top: 2px solid #D3AD7B;   /* 墙脚线 */
+  }
+  /* 窗户:白窗框 + 淡蓝玻璃 + 十字窗棂 + 一朵云 */
+  .win {
+    position: absolute;
+    left: 28px; top: 26px;
+    width: 76px; height: 68px;
+    border-radius: 9px;
+    background: linear-gradient(180deg, #C3E1F3 0%, #EBF7FD 100%);
+    border: 5px solid #FFFCF5;
+    box-shadow: 0 0 0 1.5px #DCC49C, 0 3px 7px rgba(160, 120, 70, 0.12);
+  }
+  .win::before, .win::after {   /* 十字窗棂 */
+    content: '';
+    position: absolute;
+    background: #FFFCF5;
+  }
+  .win::before { left: 50%; top: 0; bottom: 0; width: 4px; margin-left: -2px; }
+  .win::after  { top: 50%; left: 0; right: 0; height: 4px; margin-top: -2px; }
+  .win i {   /* 玻璃上飘的一朵云 */
+    position: absolute;
+    left: 7px; bottom: 9px;
+    width: 25px; height: 9px;
+    border-radius: 999px;
+    background: #FFFFFF;
+    opacity: 0.9;
+  }
+  .win i::before {
+    content: '';
+    position: absolute;
+    left: 5px; top: -5px;
+    width: 13px; height: 11px;
+    border-radius: 50%;
+    background: #FFFFFF;
+  }
+
+  /* 墙上的小挂画:画里是太阳和地平线 */
+  .pic {
+    position: absolute;
+    right: 30px; top: 32px;
+    width: 58px; height: 48px;
+    border-radius: 6px;
+    background: #FFFCF5;
+    border: 4px solid #EBD8B8;
+    box-shadow: 0 3px 7px rgba(160, 120, 70, 0.12);
+  }
+  .pic::before {   /* 画里的暖色太阳 */
+    content: '';
+    position: absolute;
+    left: 50%; top: 50%;
+    width: 21px; height: 21px;
+    margin: -13px 0 0 -10px;
+    border-radius: 50%;
+    background: #F5C06A;
+  }
+  .pic::after {    /* 画里的地平线 */
+    content: '';
+    position: absolute;
+    left: 7px; right: 7px; bottom: 7px;
+    height: 3px;
+    border-radius: 2px;
+    background: #C7D9B5;
+  }
+
+  /* 地板上的睡垫(毛茸茸):宠物平时就站在这上面。
+     这里改成 SVG —— 因为「毛边」需要一整圈长短不一的圆球,
+     纯 CSS 的 border-radius 只能做出光滑的椭圆,做不出绒毛 */
+  .bed {
+    position: absolute;
+    left: 50%; bottom: 0;
+    width: 220px; height: 70px;
+    margin-left: -110px;
+  }
+
+  /* 右侧地板上的小台灯:梯形灯罩 + 细灯杆 */
+  .lamp {
+    position: absolute;
+    right: 30px; bottom: 30px;
+    width: 36px; height: 54px;
+  }
+  .lamp::before {
+    content: '';
+    position: absolute;
+    left: 0; right: 0; top: 0;
+    height: 21px;
+    border-radius: 4px 4px 1px 1px;
+    background: linear-gradient(180deg, #F8CE8A, #EFB865);
+    clip-path: polygon(16% 0, 84% 0, 100% 100%, 0 100%);
+  }
+  .lamp::after {
+    content: '';
+    position: absolute;
+    left: 50%; top: 21px; bottom: 0;
+    width: 3px;
+    margin-left: -1.5px;
+    border-radius: 2px;
+    background: #C8A87E;
+  }
+  /* 宠物外面再包一层 .pet-hop,专门负责「跑、跳、睡」的整体位移。
+     分工:.pet-hop 管整只宠物怎么移动,.pet-svg 管它自己怎么呼吸/颠簸 */
+  .pet-hop {
+    position: relative;   /* 配合下面的 z-index,让宠物盖在两层光晕之上 */
+    z-index: 1;
+    line-height: 0;
+    transform-origin: center bottom;   /* 压缩、拉伸都以「脚底」为基准,才像站在地上 */
+  }
+  .pet-svg {
+    display: block;
+    width: 184px;
+    height: 167px;
+    animation: float 3s ease-in-out infinite;
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-8px); }
+  }
+
+  /* ---------- 眨眼 ---------- */
+  .eye {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: blink 4.5s ease-in-out infinite;
+  }
+  @keyframes blink {
+    0%, 90%, 100% { transform: scaleY(1); }
+    94%           { transform: scaleY(0.1); }
+  }
+
+  /* ---------- 摇尾巴 ---------- */
+  .tail {
+    transform-box: fill-box;
+    transform-origin: bottom left;
+    animation: wag 1.6s ease-in-out infinite;
+  }
+  @keyframes wag {
+    0%, 100% { transform: rotate(-7deg); }
+    50%      { transform: rotate(9deg); }
+  }
+
+  /* ---------- 开心表情 ---------- */
+  .mouth-happy { opacity: 0; }
+
+  .pet-stage.happy .pet-svg  { animation: bounce 0.6s ease; }
+  .pet-stage.happy .eye      { animation: none; transform: scaleY(0.18); }
+  .pet-stage.happy .mouth-normal { opacity: 0; }
+  .pet-stage.happy .mouth-happy  { opacity: 1; }
+
+  @keyframes bounce {
+    0%   { transform: translateY(0); }
+    40%  { transform: translateY(-18px); }
+    100% { transform: translateY(0); }
+  }
+
+  /* ======================================================
+     第 5 步:跑、跳、睡
+     每个动作就是给 .pet-stage 加一个类名(running / jumping / sleeping),
+     CSS 看到类名就自动播放对应的动画。JS 只负责「加类名、过一会儿删掉」。
+     ====================================================== */
+
+  /* ---------- ① 跑:外层跑左右,内层颠上下 ---------- */
+  .pet-stage.running .pet-hop {
+    animation: runTrack 3s linear infinite;
+  }
+  .pet-stage.running .pet-svg {
+    animation: runHop 0.32s ease-in-out infinite;
+  }
+  .pet-stage.running .tail { animation-duration: 0.45s; }   /* 尾巴甩得更起劲 */
+
+  @keyframes runTrack {
+    0%    { transform: translateX(-40px) scaleX(1); }
+    49.9% { transform: translateX(40px)  scaleX(1); }    /* 跑到右边 */
+    50%   { transform: translateX(40px)  scaleX(-1); }   /* 原地转身(左右镜像) */
+    99.9% { transform: translateX(-40px) scaleX(-1); }   /* 跑回左边 */
+    100%  { transform: translateX(-40px) scaleX(1); }
+  }
+  @keyframes runHop {
+    0%, 100% { transform: translateY(0)     scale(1, 1); }
+    50%      { transform: translateY(-11px) scale(0.97, 1.03); }
+  }
+
+  /* ---------- ② 跳:蹲下 → 腾空 → 落地压缩,连跳 3 下 ---------- */
+  .pet-stage.jumping .pet-svg { animation: none; }
+  .pet-stage.jumping .pet-hop { animation: jump 0.7s ease-in-out 3; }
+
+  @keyframes jump {
+    0%   { transform: translateY(0)     scale(1, 1); }
+    14%  { transform: translateY(3px)   scale(1.10, 0.90); }   /* 蹲下蓄力 */
+    45%  { transform: translateY(-30px) scale(0.94, 1.10); }   /* 腾空拉长 */
+    72%  { transform: translateY(3px)   scale(1.10, 0.90); }   /* 落地压扁 */
+    100% { transform: translateY(0)     scale(1, 1); }
+  }
+
+  /* ---------- ③ 睡:慢慢呼吸,眼睛闭上,右上角冒 Zzz ---------- */
+  .pet-stage.sleeping .pet-svg { animation: none; }
+  .pet-stage.sleeping .pet-hop { animation: sleepBreath 4s ease-in-out infinite; }
+  .pet-stage.sleeping .eye     { animation: none; transform: scaleY(0.12); }
+  .pet-stage.sleeping .tail    { animation-duration: 5.5s; }
+  .pet-stage.sleeping .mouth-happy { opacity: 0; }
+  .pet-stage.sleeping .mouth-normal { opacity: 1; }
+
+  @keyframes sleepBreath {
+    0%, 100% { transform: translateY(0)    scale(1, 1); }
+    50%      { transform: translateY(-4px) scale(1.02, 1.01); }
+  }
+
+  /* Zzz:睡着的信号。写在 .pet-stage 后面,用 ~ 兄弟选择器控制显示 */
+  .zzz {
+    position: absolute;
+    top: 12px;
+    right: 28px;
+    z-index: 2;             /* 睡觉的 Z 要飘在卧室场景和宠物之上 */
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    font-weight: 700;
+    color: #A1887F;
+    opacity: 0;
+    transition: opacity 0.4s;
+    pointer-events: none;   /* 别挡住点击宠物 */
+  }
+  .zzz b { font-size: 22px; animation: zfloat 2.4s ease-in-out infinite; }
+  .zzz i { font-style: normal; font-size: 15px; animation: zfloat 2.4s ease-in-out 0.35s infinite; }
+  .zzz i + i { font-size: 11px; animation-delay: 0.7s; }
+
+  @keyframes zfloat {
+    0%   { transform: translateY(8px);   opacity: 0; }
+    35%  { transform: translateY(0);     opacity: 1; }
+    100% { transform: translateY(-12px); opacity: 0; }
+  }
+  .pet-stage.sleeping ~ .zzz { opacity: 1; }
+
+  /* ======================================================
+     第 17 步:吃东西(两种吃法)
+     ------------------------------------------------------
+     喂食之后,那样食物会出现在宠物嘴边,一口一口被咬掉。
+     做法和跑/跳/睡一模一样 —— 给 .pet-stage 挂一个 'eating' 类,
+     剩下全交给 CSS 的 @keyframes;JS 只在到点时把类摘掉。
+
+     ★ 'eating' 再配一个口味类,就是两种完全不同的吃相:
+         .eating.like  —— 吃到爱吃的:2.4 秒三口,尾巴甩得飞快,
+                          每咬一口掉三粒渣,吃完蹦一下、冒两颗爱心
+         .eating.meh   —— 不对口味的:3 秒。食物升到嘴边先「愣着」看一会儿
+                          (那 0.75 秒的停顿就是「犹豫」,不用另外画表情),
+                          然后只咬两口、每口都小一号,眼睛眯着,
+                          尾巴懒得动,一共才掉两粒渣;吃完不蹦,改成甩两下头
+     ★ 两段时长分别对应 JS 里的 EAT_LIKE_MS / EAT_MEH_MS,改要一起改。
+
+     碎屑的颜色跟着食物走:七种食物在 JS 的 FOOD_CRUMB 里各配三个色,
+     由 startEating() 写成元素上的 --crumb-1/2/3 变量 ——
+     吃小鱼干掉的是灰蓝色的渣,吃胡萝卜掉的是橙色的渣。
+     ====================================================== */
+
+  /* ---------- 张开的嘴:平时藏着,吃东西时才露出来 ---------- */
+  .mouth-eat {
+    opacity: 0;
+    transform-box: fill-box;
+    transform-origin: center top;   /* 从上唇往下张开,才像真的张嘴 */
+  }
+
+  /* ---------- ① 食物:从脚下升起 → 停在嘴边 → 一口口变小 ---------- */
+  /* left / top 由 renderPet() 按每只宠物的嘴高写进去(每只的嘴不在同一高度),
+     这里只管大小和动画。负 margin = 让元素以 left/top 那个点为中心 */
+  /* left 66% / 44px 这个组合是算过的,不是随手写的:
+       .pet-svg 实际显示 184×167(viewBox 是 220×200,所以横向缩 0.836、纵向缩 0.835)。
+       三只宠物的右眼换算成像素后,最靠下的是雪球 —— 眼睛底边在 y≈85px。
+       食物放在左边 66%、44px 见方,占 y 87~131,正好从眼睛底下擦过去,一点不挡脸;
+       它的左边缘又只比嘴唇右边多出一点点,看着像「递到嘴边」而不是「贴在脸上」。 */
+  .eat-prop {
+    position: absolute;
+    left: 66%;
+    width: 44px;
+    height: 44px;
+    margin: -22px 0 0 -22px;
+    z-index: 3;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .eat-prop svg { display: block; width: 100%; height: 100%; }
+
+  .pet-stage.eating.like .eat-prop { animation: foodEat    2.4s ease-in-out forwards; }
+  .pet-stage.eating.meh  .eat-prop { animation: foodEatMeh 3s   ease-in-out forwards; }
+
+  /* 25% / 50% / 75% 是三个「咬」的时刻,和下面 chew、chomp 的节奏对齐 */
+  @keyframes foodEat {
+    0%   { opacity: 0; transform: translate(0, 34px) scale(0.25) rotate(-20deg); }
+    10%  { opacity: 1; transform: translate(0, 0)    scale(1)    rotate(0deg); }
+    25%  { transform: translate(0, 0)       scale(1)    rotate(0deg); }   /* 先让你看清是什么 */
+    31%  { transform: translate(-3px, -8px) scale(0.82) rotate(-9deg); }  /* 第一口 */
+    38%  { transform: translate(0, 0)       scale(0.70) rotate(0deg); }
+    50%  { transform: translate(0, 0)       scale(0.70) rotate(0deg); }
+    56%  { transform: translate(-3px, -8px) scale(0.52) rotate(8deg); }   /* 第二口 */
+    62%  { transform: translate(0, 0)       scale(0.42) rotate(0deg); }
+    75%  { transform: translate(0, 0)       scale(0.42) rotate(0deg); }
+    81%  { transform: translate(-3px, -8px) scale(0.22) rotate(-7deg); }  /* 第三口 */
+    88%  { transform: translate(0, 0)       scale(0.16) rotate(0deg); opacity: 1; }
+    100% { opacity: 0; transform: translate(0, -4px) scale(0) rotate(0deg); }
+  }
+
+  /* 不对口味的那一套:升到嘴边之后先「愣着」,一直停到 35%(约 1.05 秒)才动 ——
+     这段停顿就是「犹豫」,不用额外画表情。然后只咬两口,
+     每口都比上面小一号(缩放留得更多、抬起来更轻)。 */
+  @keyframes foodEatMeh {
+    0%   { opacity: 0; transform: translate(0, 34px) scale(0.25) rotate(-14deg); }
+    10%  { opacity: 1; transform: translate(0, 0)    scale(1)    rotate(0deg); }
+    35%  { transform: translate(0, 0)       scale(1)    rotate(0deg); }   /* ← 犹豫到这儿 */
+    42%  { transform: translate(-2px, -6px) scale(0.84) rotate(-6deg); }  /* 第一口(1.26s) */
+    48%  { transform: translate(0, 0)       scale(0.76) rotate(0deg); }
+    68%  { transform: translate(0, 0)       scale(0.76) rotate(0deg); }
+    72%  { transform: translate(-2px, -6px) scale(0.54) rotate(5deg); }   /* 第二口(2.16s) */
+    78%  { transform: translate(0, 0)       scale(0.44) rotate(0deg); }
+    92%  { transform: translate(0, 0)       scale(0.16) rotate(0deg); opacity: 1; }
+    100% { opacity: 0; transform: translate(0, -3px) scale(0) rotate(0deg); }
+  }
+
+  /* ---------- ② 身体:每咬一口就往下压一下(squash & stretch) ---------- */
+  .pet-stage.eating .pet-svg { animation: none; }
+  /* 0.53s 后开始,每 0.6s 压一次、共 3 次 —— 峰值正好落在 0.74 / 1.34 / 1.94 秒,
+     和上面 foodEat 里三个「咬」的时刻对齐 */
+  .pet-stage.eating.like .pet-hop { animation: chew 0.6s ease-in-out 0.53s 3; }
+  .pet-stage.eating.like .tail    { animation-duration: 0.5s; }   /* 吃得高兴,尾巴甩得快些 */
+
+  /* 不对口:每 0.9 秒压一次、只压 2 次,峰值落在 1.26 / 2.16 秒(两个咬点);
+     幅度也比上面小 —— 像不太情愿地嚼两下 */
+  .pet-stage.eating.meh .pet-hop { animation: chewMeh 0.9s ease-in-out 0.9s 2; }
+  .pet-stage.eating.meh .tail    { animation-duration: 3.4s; }    /* 尾巴懒得动 */
+
+  @keyframes chew {
+    0%, 100% { transform: translateY(0)   scale(1, 1); }
+    35%      { transform: translateY(4px) scale(1.04, 0.94); }
+  }
+
+  @keyframes chewMeh {
+    0%, 100% { transform: translateY(0)   scale(1, 1); }
+    40%      { transform: translateY(3px) scale(1.03, 0.96); }
+  }
+
+  /* 不对口的表情:眼睛眯起来盯着那口饭。20%(0.6 秒)才眯上 —— 先看一眼,才皱脸 */
+  .pet-stage.eating.meh .eye { animation: squint 3s ease-in-out forwards; }
+
+  @keyframes squint {
+    0%, 8% { transform: scaleY(1); }
+    20%    { transform: scaleY(0.42); }
+    85%    { transform: scaleY(0.42); }
+    100%   { transform: scaleY(1); }
+  }
+
+  /* ---------- ③ 嘴:跟着一开一合 ---------- */
+  .pet-stage.eating .mouth-normal { opacity: 0; }
+  .pet-stage.eating .mouth-happy  { opacity: 0; }
+  .pet-stage.eating .mouth-eat { opacity: 1; }
+  .pet-stage.eating.like .mouth-eat { animation: chomp 0.6s ease-in-out 0.53s 3; }  /* 和 chew 同一拍子 */
+  .pet-stage.eating.meh  .mouth-eat { animation: chompMeh 0.9s ease-in-out 0.9s 2; }
+
+  @keyframes chomp {
+    0%, 100% { transform: scaleY(0.5); }
+    35%      { transform: scaleY(1.25); }   /* 咬下去的那一刻张到最大 */
+  }
+
+  @keyframes chompMeh {
+    0%, 100% { transform: scaleY(0.5); }
+    40%      { transform: scaleY(1.06); }   /* 嘴也张得小 —— 小口小口地吃 */
+  }
+
+  /* ---------- ④ 碎屑:每咬一口,嘴边溅出三粒 ---------- */
+  /* 碎屑的起点由 renderPet() 按嘴的高度写进去,这里的 left/top 只是兜底默认值 */
+  .crumbs { position: absolute; left: 62%; top: 64%; z-index: 4; pointer-events: none; }
+  .crumb {
+    position: absolute;
+    width: 4px; height: 4px;
+    margin: -2px 0 0 -2px;
+    border-radius: 50%;
+    opacity: 0;
+  }
+  /* 碎屑的颜色跟着食物走 —— 三个变量由 startEating() 按 FOOD_CRUMB 写上去,
+     这里只兜底成「米色渣」。吃小鱼干掉灰蓝色的渣,吃胡萝卜掉橙色的渣 */
+  .crumb:nth-child(1) { background: var(--crumb-1, #D8B074); }
+  .crumb:nth-child(2) { background: var(--crumb-2, #C9A063); }
+  .crumb:nth-child(3) { background: var(--crumb-3, #E6C893); }
+
+  /* 三粒方向各不相同,起飞时间错开一点点,才不会像一起弹出来的。
+     0.72s 起 = 第一口咬下去之后的一瞬间 */
+  /* 周期必须是 0.6 秒 —— 和咬的节奏一模一样,这样每一粒都正好在咬下去那一刻飞出来。
+     关键帧里 60% 就飞完了,剩下 40% 的时间是「隐身等着」,所以周期能拉长而不显得飘。
+     (早先写的是 0.5 秒:第一粒对得上,后面两粒会一次比一次早 0.1 秒,越看越别扭) */
+  .pet-stage.eating.like .crumb:nth-child(1) { animation: crumbA 0.6s ease-out 0.74s 3; }
+  .pet-stage.eating.like .crumb:nth-child(2) { animation: crumbB 0.6s ease-out 0.76s 3; }
+  .pet-stage.eating.like .crumb:nth-child(3) { animation: crumbC 0.6s ease-out 0.78s 3; }
+
+  /* 不对口:一共才掉两粒,而且各掉各的 —— 一个咬点配一粒,
+     时间分别对上 1.26 / 2.16 秒;末尾的 1 是「只播一次」,
+     所以两粒之间隔多久都不会乱(第三粒干脆不演:吃这么点,犯不上掉渣) */
+  .pet-stage.eating.meh .crumb:nth-child(1) { animation: crumbA 0.4s ease-out 1.28s 1; }
+  .pet-stage.eating.meh .crumb:nth-child(2) { animation: crumbB 0.4s ease-out 2.18s 1; }
+  .pet-stage.eating.meh .crumb:nth-child(3) { animation: none; }
+
+  /* 三粒方向各不相同。60% 就飞完并隐身(见上面「周期必须是 0.6 秒」那段),
+     9% 时才刚冒头(用 15% 会显得是「突然出现」而不是「溅出来」)。 */
+  @keyframes crumbA {
+    0%   { opacity: 0; transform: translate(0, 0) scale(0.5); }
+    9%   { opacity: 1; }
+    60%  { opacity: 0; transform: translate(16px, -18px) scale(0.3); }
+    100% { opacity: 0; transform: translate(16px, -18px) scale(0.3); }
+  }
+  @keyframes crumbB {
+    0%   { opacity: 0; transform: translate(0, 0) scale(0.5); }
+    9%   { opacity: 1; }
+    60%  { opacity: 0; transform: translate(24px, -5px) scale(0.3); }
+    100% { opacity: 0; transform: translate(24px, -5px) scale(0.3); }
+  }
+  @keyframes crumbC {
+    0%   { opacity: 0; transform: translate(0, 0) scale(0.5); }
+    9%   { opacity: 1; }
+    60%  { opacity: 0; transform: translate(14px, 10px) scale(0.3); }
+    100% { opacity: 0; transform: translate(14px, 10px) scale(0.3); }
+  }
+
+  /* ---------- ⑤ 吃完了:头顶冒两颗爱心 ---------- */
+  .hearts {
+    position: absolute;
+    left: 50%;
+    top: 8%;
+    margin-left: -32px;
+    display: flex;
+    align-items: flex-end;
+    gap: 3px;
+    z-index: 2;
+    opacity: 0;
+    transition: opacity 0.25s;
+    pointer-events: none;   /* 别挡住点击宠物 */
+  }
+  .hearts svg { display: block; animation: heartFloat 1.1s ease-in-out infinite; }
+  .hearts svg:nth-child(2) { animation-delay: 0.32s; }
+  .pet-stage.yum ~ .hearts { opacity: 1; }
+
+  /* 不对口吃完了:不蹦,改成甩两下头(「算了,吃都吃了」),
+     爱心也只冒一颗 —— 是高兴,只是没那么高兴 */
+  .pet-stage.meh-yum .pet-hop { animation: shakeHead 0.45s ease-in-out 2; }
+  .pet-stage.meh-yum ~ .hearts { opacity: 1; }
+  .pet-stage.meh-yum ~ .hearts svg:nth-child(2) { opacity: 0; }
+
+  @keyframes shakeHead {
+    0%, 100% { transform: rotate(0deg); }
+    30%      { transform: rotate(-4deg); }
+    70%      { transform: rotate(4deg); }
+  }
+
+  @keyframes heartFloat {
+    0%   { opacity: 0; transform: translateY(8px)   scale(0.7); }
+    30%  { opacity: 1; transform: translateY(0)     scale(1); }
+    100% { opacity: 0; transform: translateY(-24px) scale(1.05); }
+  }
+
+  /* ---------- 名字与状态 ---------- */
+  .pet-name {
+    font-size: 23px;
+    font-weight: 600;
+    color: #5D4037;
+    margin: 4px 0 2px;
+  }
+  .pet-status {
+    color: #8D6E63;
+    font-size: 13px;
+    margin-bottom: 12px;
+    min-height: 18px;
+  }
+
+  /* ---------- 状态条 ---------- */
+  .stat-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 8px 0;
+    font-size: 13px;
+    color: #6D4C41;
+  }
+  .stat-bar .label { width: 52px; text-align: left; }
+  .stat-bar .bar {
+    flex: 1;
+    height: 8px;
+    background: #FFE0B2;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .stat-bar .fill {
+    height: 100%;
+    width: 80%;
+    background: linear-gradient(90deg, #FFB74D, #FF9800);
+    transition: width 0.3s ease;
+  }
+  .stat-bar .value { width: 40px; text-align: right; }
+
+  /* ---------- 按钮 ---------- */
+  .actions { margin-top: 16px; }
+
+  /* 原来这里还有一套「跑/跳/睡」蓝色虚线按钮的样式(.action-btn.act / .act.on),
+     按钮删掉后就成了永远用不到的死代码 —— 顺手清掉,免得以后看晕 */
+
+  .action-btn {
+    background: #FF9800;
+    color: #fff;
+    border: none;
+    padding: 10px 22px;
+    border-radius: 999px;
+    font-family: inherit;
+    font-size: 14px;
+    cursor: pointer;
+    margin: 4px;
+    transition: transform 0.1s, background 0.2s;
+  }
+  .action-btn:hover { background: #F57C00; }
+  .action-btn:active { transform: scale(0.95); }
+  .action-btn.secondary { background: #FFE0B2; color: #5D4037; }
+  .action-btn.secondary:hover { background: #FFCC80; }
+
+  /* ---------- 对话记录区(聊天窗口) ---------- */
+  .chat-log {
+    margin-top: 14px;
+    height: 156px;              /* 固定高度,内容多了在里面滚动 */
+    overflow-y: auto;
+    padding: 10px;
+    background: #FFFBF2;
+    border: 1px solid #FFE8CC;
+    border-radius: 14px;
+    display: flex;
+    flex-direction: column;     /* 一条一条从上往下排 */
+    gap: 8px;
+  }
+
+  /* 单个气泡:宠物在左,你在右 */
+  .bubble {
+    max-width: 82%;
+    padding: 8px 12px;
+    border-radius: 14px;
+    font-size: 13.5px;
+    line-height: 1.5;
+    word-break: break-word;
+    animation: pop 0.25s ease;  /* 冒出来时轻轻上浮一下 */
+  }
+  @keyframes pop {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .bubble.pet {
+    align-self: flex-start;     /* 靠左 */
+    background: #FFE0B2;
+    color: #5D4037;
+    border-bottom-left-radius: 4px;
+  }
+  .bubble.me {
+    align-self: flex-end;       /* 靠右 */
+    background: #FF9800;
+    color: #FFFFFF;
+    border-bottom-right-radius: 4px;
+  }
+
+  /* ---------- 输入区 ---------- */
+  .input-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .input-row input {
+    flex: 1;                    /* 自动撑满剩余宽度 */
+    min-width: 0;
+    padding: 10px 14px;
+    border: 1px solid #FFCC80;
+    border-radius: 999px;
+    font-size: 14px;
+    font-family: inherit;
+    color: #5D4037;
+    background: #FFFFFF;
+    outline: none;
+  }
+  .input-row input:focus { border-color: #FF9800; }
+  .input-row button {
+    padding: 10px 18px;
+    border: none;
+    border-radius: 999px;
+    background: #FF9800;
+    color: #FFFFFF;
+    font-size: 14px;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  .input-row button:hover { background: #F57C00; }
+  .input-row button:active { transform: scale(0.95); }
+
+  /* ---------- 「试着说」命令提示条 ---------- */
+  .cmd-hints {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+  }
+  .cmd-hints .cmd-tip { font-size: 12px; color: #B08968; }
+  .cmd-chip {
+    background: #FFF3E0;
+    color: #8D6E63;
+    border: 1px dashed #FFCC80;
+    border-radius: 999px;
+    padding: 4px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+  }
+  .cmd-chip:hover { background: #FFE0B2; color: #5D4037; }
+  .cmd-chip:active { transform: scale(0.95); }
+
+  /* ---------- 今日健康打卡面板 ---------- */
+  .panel {
+    margin-top: 14px;
+    padding: 12px;
+    background: #FFFBF2;
+    border: 1px solid #FFE8CC;
+    border-radius: 14px;
+  }
+  .panel-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 13px;
+    font-weight: 500;
+    color: #5D4037;
+    margin-bottom: 4px;
+  }
+  .panel-sub { font-size: 12px; font-weight: 400; color: #A1887F; }
+  .panel-row { display: flex; gap: 8px; margin-top: 8px; align-items: center; }
+  .panel-label { font-size: 13px; color: #6D4C41; width: 30px; flex: none; }
+
+  .mini-btn {
+    flex: 1;
+    padding: 7px 10px;
+    border: 1px solid #FFCC80;
+    border-radius: 10px;
+    background: #FFFFFF;
+    color: #6D4C41;
+    font-size: 12.5px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .mini-btn:hover { background: #FFF3E0; }
+  .mini-btn:active { transform: scale(0.96); }
+  .mini-btn.done {
+    background: #EAF3DE;
+    border-color: #C0DD97;
+    color: #3B6D11;
+  }
+  .mini-btn.ghost { color: #A1887F; border-color: #E6DED4; background: transparent; }
+
+  /* 还没到打卡时段:变灰 + 虚线边,明示「现在点了也没用」 */
+  .mini-btn.locked {
+    background: transparent;
+    border-style: dashed;
+    border-color: #E6DED4;
+    color: #C4B5AD;
+    cursor: not-allowed;
+  }
+  .mini-btn.locked:hover,
+  .mini-btn.locked:active { background: transparent; transform: none; }
+
+  /* 峰流速记录:两个数字输入框。样式和旁边的按钮是同一套,
+     不填的时候是灰字提示,记下了就变绿 */
+  .panel-row.pef .panel-label { width: 42px; }
+  .pef-input {
+    flex: 1;
+    min-width: 0;
+    padding: 7px 6px;
+    border: 1px solid #FFCC80;
+    border-radius: 10px;
+    background: #FFFFFF;
+    color: #6D4C41;
+    font-size: 12.5px;
+    font-family: inherit;
+    text-align: center;
+  }
+  .pef-input::placeholder { color: #C4B5AD; }
+  .pef-input:focus { outline: none; border-color: #FF9800; }
+  .pef-input:disabled { background: #F7F3ED; border-color: #E6DED4; color: #B9A79C; }
+  .pef-input.done {
+    background: #EAF3DE;
+    border-color: #C0DD97;
+    color: #3B6D11;
+    font-weight: 600;
+  }
+  /* 变异率偏高时的提醒(≥20% 在临床上是个常见的警戒线) */
+  .pef-warn { color: #D85A30; }
+
+  /* 面板底下那行小字:写清打卡时段 */
+  .panel-note {
+    margin-top: 9px;
+    font-size: 11.5px;
+    line-height: 1.55;
+    color: #A1887F;
+  }
+  .panel-note b { font-weight: 600; color: #8D6E63; }
+  /* ---------- 小游戏:俄罗斯方块 ----------
+     它是一个盖住整张卡片的浮层。默认 display:none,点「玩耍」才变 flex。
+     做成浮层而不是新页面,好处是关掉就回到宠物,状态一点都不会丢。 */
+  .game-mask {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    background: linear-gradient(180deg, #FFFDF8, #FFF3E0);
+    border-radius: 24px;
+    padding: 16px 14px;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    overflow-y: auto;
+  }
+  .game-mask.open { display: flex; }
+
+  .game-top {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .game-title { font-size: 14px; font-weight: 500; color: #5D4037; }
+  .game-close {
+    border: 1px solid #E6DED4;
+    background: transparent;
+    color: #A1887F;
+    font-family: inherit;
+    font-size: 12px;
+    padding: 5px 11px;
+    border-radius: 9px;
+    cursor: pointer;
+  }
+  .game-close:hover { background: #FFF3E0; }
+
+  .game-hud { width: 100%; display: flex; gap: 8px; margin-bottom: 10px; }
+  .hud-item {
+    flex: 1;
+    background: #FFF6E9;
+    border: 1px solid #FFE8CC;
+    border-radius: 10px;
+    padding: 5px 4px;
+  }
+  .hud-k { font-size: 11px; color: #B08968; }
+  .hud-v { font-size: 15px; font-weight: 500; color: #5D4037; }
+
+  #tetrisCanvas {
+    display: block;
+    background: #FFFBF2;
+    border: 1px solid #FFE8CC;
+    border-radius: 10px;
+    touch-action: none;      /* 手机上按住拖动不要触发页面滚动 */
+  }
+
+  .game-pads {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .pad-btn {
+    padding: 13px 0;
+    border: 1px solid #FFCC80;
+    border-radius: 12px;
+    background: #FFFFFF;
+    color: #6D4C41;
+    font-family: inherit;
+    font-size: 16px;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .pad-btn:hover { background: #FFF3E0; }
+  .pad-btn:active { transform: scale(0.94); }
+  .pad-btn.wide { grid-column: span 2; font-size: 13px; }
+  .pad-btn.pause-on { background: #FFE0B2; border-color: #FF9800; }
+
+  .game-tip { font-size: 12px; color: #B08968; margin-top: 12px; line-height: 1.7; }
+
+  /* ---------- 一局结束后的结算浮层 ---------- */
+  .game-over {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    background: rgba(255, 253, 248, 0.95);
+    border-radius: 24px;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .game-over.open { display: flex; }
+  .go-title  { font-size: 15px; font-weight: 500; color: #5D4037; }
+  .go-score  { font-size: 34px; font-weight: 500; color: #FF9800; margin: 2px 0; }
+  .go-line   { font-size: 13px; color: #8D6E63; }
+  .go-reward {
+    font-size: 13px;
+    color: #3B6D11;
+    background: #EAF3DE;
+    border-radius: 10px;
+    padding: 8px 14px;
+    margin-top: 10px;
+    max-width: 100%;
+  }
+  .go-btns { display: flex; gap: 10px; margin-top: 14px; }
+  .go-btns button {
+    padding: 10px 18px;
+    border-radius: 11px;
+    border: 1px solid #FFCC80;
+    background: #FFFFFF;
+    color: #6D4C41;
+    font-family: inherit;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .go-btns button.primary { background: #FF9800; border-color: #FF9800; color: #FFFFFF; }
+  .go-btns button:active { transform: scale(0.95); }
+
+  /* ---------- 小卖部:点「喂食」进来的那间小店 ----------
+     它和小游戏共用同一套浮层外壳(.game-mask),
+     所以位置、圆角、滚动方式天生一致,不用再写一遍。 */
+  .shop-wallet {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    background: linear-gradient(90deg, #FFF3E0, #FFFBF2);
+    border: 1px solid #FFE0B2;
+    border-radius: 12px;
+  }
+  .shop-wallet .coin     { font-size: 15px; color: #E8890C; }
+  .shop-wallet .wallet-k { font-size: 12px; color: #B08968; }
+  .shop-wallet .wallet-v { margin-left: auto; font-size: 20px; font-weight: 500; color: #E8890C; }
+
+  /* 每一段的标题,比如「货架」「我的粮仓」 */
+  .shop-sec {
+    width: 100%;
+    font-size: 12px;
+    color: #B08968;
+    margin: 14px 2px 8px;
+  }
+
+  /* 免费口粮:一整条,点一下就喂,不花钱。领过之后变灰 */
+  .shop-free {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+    padding: 11px 12px;
+    border: 1px dashed #FFCC80;
+    border-radius: 12px;
+    background: #FFFDF8;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .shop-free:hover  { background: #FFF6E9; }
+  .shop-free:active { transform: scale(0.98); }
+  .shop-free.used   { cursor: default; opacity: 0.5; transform: none; }
+  .shop-free .free-ico  { font-size: 18px; }
+  .shop-free .free-body { display: flex; flex-direction: column; gap: 2px; }
+  .shop-free .free-t    { font-size: 13px; color: #5D4037; }
+  .shop-free .free-s    { font-size: 11px; color: #B08968; }
+
+  /* 货架:两列,六种食物 */
+  .shop-grid {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .food-card {
+    position: relative;
+    background: #FFFFFF;
+    border: 1px solid #FFE8CC;
+    border-radius: 12px;
+    padding: 10px 10px 9px;
+  }
+  .food-card.liked { border-color: #FFB74D; background: #FFFCF5; }
+  /* 「最爱」那一张再亮一档:边框更实,一眼能从两张对口里认出心头好 */
+  .food-card.best  { border-color: #FF9800; background: #FFF8EE; }
+  .food-ico  { font-size: 20px; line-height: 1.15; }
+  .food-name { font-size: 13px; color: #5D4037; margin-top: 2px; }
+  .food-eff  { font-size: 11px; color: #B08968; margin-top: 3px; }
+  /* 连着吃会腻的提示。用暖橘色而不是红色 —— 这不是出错,是「换个口味吧」 */
+  .food-warn { font-size: 10px; color: #C0703A; margin-top: 2px; }
+  .food-tag {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    font-size: 10px;
+    color: #3B6D11;
+    background: #EAF3DE;
+    border-radius: 999px;
+    padding: 2px 6px;
+  }
+  .food-tag.best { color: #FFFFFF; background: #FF9800; }
+  .food-buy {
+    width: 100%;
+    margin-top: 8px;
+    padding: 7px 0;
+    border: none;
+    border-radius: 9px;
+    background: #FF9800;
+    color: #FFFFFF;
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .food-buy:hover  { background: #F57C00; }
+  .food-buy:active { transform: scale(0.95); }
+  /* 钱不够:按钮变灰且真的按不动,不用等点了才被拒绝 */
+  .food-buy:disabled { background: #EDE4DA; color: #A1887F; cursor: not-allowed; transform: none; }
+
+  /* 我的粮仓 */
+  .shop-bag { width: 100%; display: flex; flex-direction: column; gap: 8px; }
+  .bag-item {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    background: #FFFBF2;
+    border: 1px solid #FFE8CC;
+    border-radius: 11px;
+    padding: 8px 10px;
+  }
+  .bag-item .bag-ico  { font-size: 17px; }
+  .bag-item .bag-name { font-size: 13px; color: #5D4037; }
+  .bag-item .bag-num  { display: block; font-size: 11px; color: #B08968; margin-top: 1px; }
+  .bag-feed {
+    margin-left: auto;
+    padding: 6px 14px;
+    border: none;
+    border-radius: 999px;
+    background: #FF9800;
+    color: #FFFFFF;
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .bag-feed:hover  { background: #F57C00; }
+  .bag-feed:active { transform: scale(0.95); }
+  .bag-empty { font-size: 12px; color: #C0A48C; padding: 4px 2px; }
+</style>
+</head>
+<body>
+
+  <div class="pet-card">
+
+    <!-- 宠物选择条:由 JS 自动生成 -->
+    <div class="pet-picker" id="picker"></div>
+
+    <!-- 宠物画布:SVG 会被塞进这里。外面套一层 .stage-wrap 是为了让 Zzz 能定位 -->
+    <div class="stage-wrap">
+      <!-- 卧室背景:必须放在 .pet-stage 外面,
+           否则 renderPet() 每次换宠物都会把 stageEl.innerHTML 整块替换掉,装饰就没了 -->
+      <div class="room" aria-hidden="true">
+        <div class="wall"></div>
+        <div class="floor"></div>
+        <div class="win"><i></i></div>
+        <div class="pic"></div>
+        <!-- 毛茸茸睡垫:先用「虚线圆头」自动撒出一圈小毛球,再用光滑椭圆盖住内侧 -->
+        <svg class="bed" viewBox="0 0 220 70">
+          <defs>
+            <radialGradient id="bedBody" cx="50%" cy="34%" r="74%">
+              <stop offset="0%"   stop-color="#FCE7C4"/>
+              <stop offset="55%"  stop-color="#F3CE9A"/>
+              <stop offset="100%" stop-color="#E2B47C"/>
+            </radialGradient>
+          </defs>
+
+          <!-- 地上的影子 -->
+          <ellipse cx="110" cy="64" rx="92" ry="6" fill="#C9A87C" opacity="0.20"/>
+
+          <!-- 第①层毛:最长最粗,稀疏地撒在最外圈 -->
+          <ellipse cx="110" cy="40" rx="91" ry="21" fill="none"
+                   stroke="#DCB078" stroke-width="11"
+                   stroke-dasharray="0.1 31" stroke-dashoffset="20"
+                   stroke-linecap="round"/>
+          <!-- 第②层毛:粗一点,间距密一些 -->
+          <ellipse cx="110" cy="40" rx="90" ry="20" fill="none"
+                   stroke="#E4BC88" stroke-width="18"
+                   stroke-dasharray="0.1 24" stroke-linecap="round"/>
+          <!-- 第③层毛:细一点、错开半个间距,把空隙补满 -->
+          <ellipse cx="110" cy="40" rx="87" ry="18.5" fill="none"
+                   stroke="#F0CE9D" stroke-width="14"
+                   stroke-dasharray="0.1 19" stroke-dashoffset="9"
+                   stroke-linecap="round"/>
+
+          <!-- 垫子主体:盖住毛球的内半边,只让外缘的绒毛露出来 -->
+          <ellipse cx="110" cy="40" rx="86" ry="19" fill="url(#bedBody)"/>
+
+          <!-- 中间被压出来的浅窝 -->
+          <ellipse cx="110" cy="41" rx="60" ry="10" fill="#E9C28C" opacity="0.55"/>
+
+          <!-- 顶部一道柔和高光,像绒毛被照亮 -->
+          <ellipse cx="110" cy="34" rx="50" ry="5.5" fill="#FFF6E4" opacity="0.7"/>
+        </svg>
+        <div class="lamp"></div>
+      </div>
+      <div class="pet-stage" id="stage"></div>
+      <div class="zzz" aria-hidden="true"><b>Z</b><i>z</i><i>z</i></div>
+      <!-- 吃完冒出来的爱心:和 Zzz 一样必须放在舞台外面,
+           由 .pet-stage.yum 这个兄弟选择器控制显隐 -->
+      <div class="hearts" aria-hidden="true">
+        <svg viewBox="0 0 30 28" width="30" height="28">
+          <path d="M15 26 C3 16 0 10 4 5 C8 1 13 3 15 7 C17 3 22 1 26 5 C30 10 27 16 15 26 Z"
+                fill="#F2708C"/>
+        </svg>
+        <svg viewBox="0 0 30 28" width="22" height="21">
+          <path d="M15 26 C3 16 0 10 4 5 C8 1 13 3 15 7 C17 3 22 1 26 5 C30 10 27 16 15 26 Z"
+                fill="#F79FB4"/>
+        </svg>
+      </div>
+    </div>
+
+    <div class="pet-name" id="petName">雪球</div>
+    <div class="pet-status" id="status">正在看着你~</div>
+
+    <div class="stat-bar">
+      <span class="label">饱腹</span>
+      <div class="bar"><div class="fill" id="hungerBar"></div></div>
+      <span class="value" id="hungerVal">80%</span>
+    </div>
+    <div class="stat-bar">
+      <span class="label">心情</span>
+      <div class="bar"><div class="fill" id="happyBar"></div></div>
+      <span class="value" id="happyVal">80%</span>
+    </div>
+
+    <div class="actions">
+      <button class="action-btn" onclick="openShop()">喂食</button>
+      <button class="action-btn secondary" onclick="openGame()">玩耍</button>
+      <button class="action-btn secondary" onclick="chat()">聊天</button>
+    </div>
+
+    <!-- 跑 / 跳 / 睡:不再放按钮了,改成在下面的输入框里打字下命令
+         (说「跑一跑」「跳一跳」「睡觉」「醒过来」「停下」) -->
+
+    <!-- 今日健康:吃药打卡 + 每日签到 -->
+    <div class="panel">
+      <div class="panel-head">
+        <span>今日健康</span>
+        <span class="panel-sub" id="signInfo">连续签到 0 天</span>
+      </div>
+      <div class="panel-row">
+        <span class="panel-label">吃药</span>
+        <button class="mini-btn" id="medMorning" onclick="markMed('morning')">早上 打卡</button>
+        <button class="mini-btn" id="medEvening" onclick="markMed('evening')">晚上 打卡</button>
+      </div>
+      <!-- 打卡时段说明:内容由 renderHealth() 按 MED_TIME 自动生成,改时间只改那一处 -->
+      <div class="panel-note" id="medNote"></div>
+
+      <!-- 峰流速记录:哮喘管理里的「血压计」,早上起床后、晚上睡前各吹一次。
+           两个框能填不能填,由 renderHealth() 按当前时段决定 -->
+      <div class="panel-row pef">
+        <span class="panel-label">峰流速</span>
+        <input class="pef-input" id="pefMorning" type="number" inputmode="numeric"
+               placeholder="早上" onkeydown="if (event.key === 'Enter') savePef()">
+        <input class="pef-input" id="pefEvening" type="number" inputmode="numeric"
+               placeholder="晚上" onkeydown="if (event.key === 'Enter') savePef()">
+        <button class="mini-btn" id="pefSave" onclick="savePef()">记录</button>
+      </div>
+      <div class="panel-note" id="pefNote"></div>
+
+      <div class="panel-row">
+        <button class="mini-btn" id="signBtn" onclick="checkIn()">今日签到</button>
+        <button class="mini-btn ghost" onclick="resetSave()">重置存档</button>
+      </div>
+    </div>
+
+    <!-- 聊天记录:每条对话都会变成一个小气泡塞进来 -->
+    <div class="chat-log" id="log"></div>
+
+    <!-- 输入区:打字后按 Enter 或点「发送」 -->
+    <div class="input-row">
+      <input id="input" type="text" placeholder="和雪球说点什么…"
+             onkeydown="if (event.key === 'Enter') send()">
+      <button onclick="send()">发送</button>
+    </div>
+
+    <!-- 「试着说」:点一下就等于帮你打字+发送(命令提示条由 JS 生成) -->
+    <div class="cmd-hints" id="cmdHints"></div>
+
+    <!-- ============ 小游戏浮层:俄罗斯方块 ============
+         它盖在整张卡片上,默认藏着(display:none),点「玩耍」才出现。
+         这里放了两个空壳:棋盘画布 #tetrisCanvas 和结算层 #gameOver,
+         里面的东西全靠 JS 往上画 / 填 -->
+    <div class="game-mask" id="gameMask">
+
+      <div class="game-top">
+        <span class="game-title" id="gameTitle">陪雪球玩 · 俄罗斯方块</span>
+        <button class="game-close" onclick="closeGame()">退出</button>
+      </div>
+
+      <div class="game-hud">
+        <div class="hud-item"><div class="hud-k">分数</div><div class="hud-v" id="hudScore">0</div></div>
+        <div class="hud-item"><div class="hud-k">消行</div><div class="hud-v" id="hudLines">0</div></div>
+        <div class="hud-item"><div class="hud-k">等级</div><div class="hud-v" id="hudLevel">1</div></div>
+      </div>
+
+      <!-- 宽 240 / 高 480 = 10 列 × 24 像素、20 行 × 24 像素。
+           这两个数字会被 JS 按屏幕像素密度重设,这样在高清屏上才不糊 -->
+      <canvas id="tetrisCanvas" width="240" height="480"></canvas>
+
+      <!-- 手机上没有键盘,所以给一套按钮。点它们和按键盘走的是同一个函数 -->
+      <div class="game-pads">
+        <button class="pad-btn" onclick="gameMove(-1)">←</button>
+        <button class="pad-btn" onclick="gameRotate()">旋转</button>
+        <button class="pad-btn" onclick="gameMove(1)">→</button>
+        <button class="pad-btn" onclick="gameSoftDrop()">↓</button>
+        <button class="pad-btn wide" onclick="gameHardDrop()">直接落到底</button>
+        <button class="pad-btn wide" id="padPause" onclick="gameTogglePause()">暂停</button>
+      </div>
+
+      <div class="game-tip">
+        键盘也能玩:← → 左右移动 ↑ 旋转 ↓ 下落 空格 直接落底 P 暂停<br>
+        分数越高,心情加得越多(封顶 +25),爱心币也赚得越多<br>
+        每打一局饱腹 -30(费脑子);饱腹不足 30 会打不动,先喂它一点
+      </div>
+
+      <!-- 不想打方块、只想快点陪它一下?走这条捷径,等于原来那个「玩耍」 -->
+      <button class="mini-btn" style="margin-top:10px;max-width:240px;" onclick="quickPlay()">
+        不想玩方块,直接陪它玩一下(+15 心情 · 饱腹 -20)
+      </button>
+
+      <!-- 一局结束才显示。里面四个数字全是 JS 填的 -->
+      <div class="game-over" id="gameOver">
+        <div class="go-title" id="goTitle">这局结束啦</div>
+        <div class="go-score" id="goScore">0</div>
+        <div class="go-line"  id="goLine">消了 0 行 · 等级 1</div>
+        <div class="go-reward" id="goReward">心情 +0</div>
+        <div class="go-btns">
+          <button class="primary" onclick="gameRestart()">再玩一局</button>
+          <button onclick="closeGame()">回去陪它</button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ============ 小卖部浮层:点「喂食」打开 ============
+         从上到下四段:钱包 → 免费口粮 → 货架 → 我的粮仓。
+         货架上的卡片和粮仓里的条目全是 JS 按 FOODS 那张表生成的,
+         所以想加一种新食物,只要往表里加一行,界面自动就出来了 -->
+    <div class="game-mask" id="shopMask">
+
+      <div class="game-top">
+        <span class="game-title" id="shopTitle">小卖部</span>
+        <button class="game-close" onclick="closeShop()">退出</button>
+      </div>
+
+      <!-- 钱包:爱心币余额 -->
+      <div class="shop-wallet">
+        <span class="coin">♥</span>
+        <span class="wallet-k">我的爱心币</span>
+        <span class="wallet-v" id="shopCoins">0</span>
+      </div>
+
+      <!-- 免费口粮:每天 1 份,保证不花钱也能喂饱它 -->
+      <button class="shop-free" id="freeFoodBtn" onclick="feed()">
+        <span class="free-ico">🍚</span>
+        <span class="free-body">
+          <span class="free-t" id="freeFoodT">免费口粮</span>
+          <span class="free-s" id="freeFoodS">今天的还没领</span>
+        </span>
+      </button>
+
+      <div class="shop-sec" id="shopSecFood">货架</div>
+      <div class="shop-grid" id="shopGrid"></div>
+
+      <!-- 点「喂」会自动关掉小卖部回主界面 —— 吃东西的动画演在主界面的舞台上,
+           柜台不关上就全被它挡住了,所以那行字得先说清楚,别让人以为点了没反应 -->
+      <div class="shop-sec">我的粮仓 · 点「喂」就回主界面,看它当着你的面吃</div>
+      <div class="shop-bag" id="shopBag"></div>
+
+      <!-- 这一行由 renderShop() 按 COIN_EARN 表生成 —— 赚币数额改了,这里自动跟着改 -->
+      <div class="game-tip" id="shopTip"></div>
+
+    </div>
+
+  </div>
+
+<script>
+/* ============================================================
+   第 2 步核心:用 SVG「画」出宠物
+   SVG 就是用一堆形状(圆、椭圆、路径)拼出来的图,
+   好处是放大不糊、颜色随便改、还能用 CSS 做动画。
+   ============================================================ */
+
+const PETS = {
+
+  /* ---------------- 白色蓝瞳高地猫 ---------------- */
+  cat: {
+    name: '雪球',
+    mouthY: 58.5,          /* 嘴在身上的高度(占整体高的百分比),喂食时食物停在这个高度 */
+    svg: `
+      <svg class="pet-svg" viewBox="0 0 220 200">
+        <!-- 地上的影子 -->
+        <ellipse cx="110" cy="194" rx="46" ry="7" fill="#000" opacity="0.06"/>
+
+        <!-- 蓬松大尾巴:粗灰边 + 细白芯,叠出「毛茸茸」的厚度 -->
+        <g class="tail">
+          <path d="M162 148 C194 144 204 110 186 88"
+                stroke="#DCDCDC" stroke-width="20" stroke-linecap="round" fill="none"/>
+          <path d="M162 148 C194 144 204 110 186 88"
+                stroke="#FFFFFF" stroke-width="15" stroke-linecap="round" fill="none"/>
+        </g>
+
+        <!-- 身体(白毛) -->
+        <ellipse cx="110" cy="160" rx="50" ry="33" fill="#FFFFFF" stroke="#DCDCDC" stroke-width="2"/>
+
+        <!-- 脖子上的粉色蝴蝶结(三部分:飘带 → 左右两个环 → 中间的结) -->
+        <!-- ① 两条飘带,先画,根部会被结压住 -->
+        <path d="M103 153 C97 161 95 166 93 172"
+              stroke="#E88BA0" stroke-width="9" stroke-linecap="round" fill="none"/>
+        <path d="M117 153 C123 161 125 166 127 172"
+              stroke="#E88BA0" stroke-width="9" stroke-linecap="round" fill="none"/>
+
+        <!-- ② 左右两个环:都是从中心点出发,绕一圈再回到中心点 -->
+        <path d="M110 148 Q86 126 74 136 Q64 146 74 160 Q86 170 110 148 Z"
+              fill="#FFC2D1" stroke="#E88BA0" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M110 148 Q134 126 146 136 Q156 146 146 160 Q134 170 110 148 Z"
+              fill="#FFC2D1" stroke="#E88BA0" stroke-width="2" stroke-linejoin="round"/>
+
+        <!-- ③ 中间的结(颜色比环深一点,才分得出层次) -->
+        <ellipse cx="110" cy="148" rx="12" ry="11"
+                 fill="#F2A0B5" stroke="#E88BA0" stroke-width="2"/>
+        <path d="M104 143 q6 -4 12 0" stroke="#FFD9E3" stroke-width="2.5"
+              fill="none" stroke-linecap="round"/>
+
+        <!-- 耳朵(先画,根部会被头盖住) -->
+        <path d="M72 66 L58 18 L106 54 Z" fill="#FFFFFF" stroke="#DCDCDC"
+              stroke-width="2" stroke-linejoin="round"/>
+        <path d="M148 66 L162 18 L114 54 Z" fill="#FFFFFF" stroke="#DCDCDC"
+              stroke-width="2" stroke-linejoin="round"/>
+        <path d="M74 54 L66 26 L98 46 Z" fill="#FFD3DE"/>
+        <path d="M146 54 L154 26 L122 46 Z" fill="#FFD3DE"/>
+
+        <!-- 胡须(先画,根部会被头盖住) -->
+        <path d="M70 96 h-36 M70 105 h-36 M150 96 h36 M150 105 h36"
+              stroke="#D8D8D8" stroke-width="2" stroke-linecap="round"/>
+
+        <!-- 头(高地猫:脸更圆更宽) -->
+        <ellipse cx="110" cy="94" rx="54" ry="48" fill="#FFFFFF" stroke="#DCDCDC" stroke-width="2"/>
+
+        <!-- 额头一撮长毛 -->
+        <path d="M104 48 q6 10 12 0" stroke="#EDEDED" stroke-width="3" fill="none" stroke-linecap="round"/>
+
+        <!-- 蓝色眼睛(会眨) -->
+        <g class="eye">
+          <ellipse cx="86" cy="92" rx="8.5" ry="10" fill="#6BB0E8"/>
+          <ellipse cx="86" cy="92" rx="3.6" ry="6.2" fill="#22384F"/>
+          <circle cx="89" cy="87" r="2.6" fill="#fff"/>
+        </g>
+        <g class="eye">
+          <ellipse cx="134" cy="92" rx="8.5" ry="10" fill="#6BB0E8"/>
+          <ellipse cx="134" cy="92" rx="3.6" ry="6.2" fill="#22384F"/>
+          <circle cx="137" cy="87" r="2.6" fill="#fff"/>
+        </g>
+
+        <!-- 腮红 -->
+        <ellipse cx="70"  cy="108" rx="10" ry="7" fill="#FFD3DE" opacity="0.8"/>
+        <ellipse cx="150" cy="108" rx="10" ry="7" fill="#FFD3DE" opacity="0.8"/>
+
+        <!-- 粉色鼻子 -->
+        <path d="M103 104 L117 104 L110 112 Z" fill="#F2A0B5"/>
+
+        <!-- 嘴:平时 -->
+        <g class="mouth-normal" stroke="#C9C9C9" stroke-width="2.5"
+           fill="none" stroke-linecap="round">
+          <path d="M110 112 q-7 7 -13 1"/>
+          <path d="M110 112 q7 7 13 1"/>
+        </g>
+        <!-- 嘴:开心时 -->
+        <path class="mouth-happy" d="M96 109 q14 16 28 0 z" fill="#F2A0B5"/>
+
+        <!-- 嘴:吃东西时张开(平时 opacity 是 0,由 .pet-stage.eating 点亮) -->
+        <g class="mouth-eat">
+          <ellipse cx="110" cy="117" rx="7.5" ry="5.5" fill="#B85A76"/>
+          <ellipse cx="110" cy="119" rx="4.6" ry="2.8" fill="#F7A8BE"/>
+        </g>
+      </svg>
+    `
+  },
+
+  /* ---------------- 斑点狗 ---------------- */
+  dog: {
+    name: '点点',
+    mouthY: 57.5,
+    svg: `
+      <svg class="pet-svg" viewBox="0 0 220 200">
+        <ellipse cx="110" cy="194" rx="46" ry="7" fill="#000" opacity="0.06"/>
+
+        <!-- 尾巴:白底 + 灰边 + 黑尾尖 -->
+        <g class="tail">
+          <path d="M162 148 C190 140 196 112 182 96"
+                stroke="#D5D5D5" stroke-width="13" stroke-linecap="round" fill="none"/>
+          <path d="M162 148 C190 140 196 112 182 96"
+                stroke="#FFFFFF" stroke-width="9" stroke-linecap="round" fill="none"/>
+          <circle cx="184" cy="99" r="6" fill="#2C2C2C"/>
+        </g>
+
+        <!-- 身体(白色) + 身上的斑点 -->
+        <ellipse cx="110" cy="158" rx="50" ry="33" fill="#FFFFFF" stroke="#DDDDDD" stroke-width="2"/>
+        <ellipse cx="84"  cy="150" rx="11" ry="9" fill="#2C2C2C" opacity="0.9"/>
+        <ellipse cx="132" cy="167" rx="9"  ry="7" fill="#2C2C2C" opacity="0.9"/>
+        <ellipse cx="116" cy="141" rx="7"  ry="6" fill="#2C2C2C" opacity="0.9"/>
+
+        <!-- 黑色垂耳 -->
+        <ellipse cx="66"  cy="96" rx="17" ry="28" fill="#2C2C2C" transform="rotate(-14 66 96)"/>
+        <ellipse cx="154" cy="96" rx="17" ry="28" fill="#2C2C2C" transform="rotate(14 154 96)"/>
+
+        <!-- 头(白色) + 脸上的斑点 -->
+        <circle cx="110" cy="92" r="48" fill="#FFFFFF" stroke="#DDDDDD" stroke-width="2"/>
+        <ellipse cx="82"  cy="66" rx="8" ry="7" fill="#2C2C2C" opacity="0.9"/>
+        <circle  cx="128" cy="58" r="5"     fill="#2C2C2C" opacity="0.9"/>
+        <ellipse cx="144" cy="110" rx="7" ry="6" fill="#2C2C2C" opacity="0.9"/>
+
+        <!-- 口鼻 -->
+        <ellipse cx="110" cy="108" rx="26" ry="18" fill="#F2F2F2"/>
+        <ellipse cx="110" cy="99"  rx="9"  ry="7"  fill="#1F1F1F"/>
+
+        <g class="eye">
+          <ellipse cx="88" cy="82" rx="6" ry="7.5" fill="#2C2C2C"/>
+          <circle cx="90" cy="79" r="2" fill="#fff"/>
+        </g>
+        <g class="eye">
+          <ellipse cx="132" cy="82" rx="6" ry="7.5" fill="#2C2C2C"/>
+          <circle cx="134" cy="79" r="2" fill="#fff"/>
+        </g>
+
+        <g class="mouth-normal" stroke="#8D6E63" stroke-width="2.5"
+           fill="none" stroke-linecap="round">
+          <path d="M110 106 v6"/>
+          <path d="M110 112 q-8 7 -14 0"/>
+          <path d="M110 112 q8 7 14 0"/>
+        </g>
+        <path class="mouth-happy" d="M97 110 q13 16 26 0 z" fill="#E57373"/>
+
+        <!-- 嘴:吃东西时张开(平时 opacity 是 0,由 .pet-stage.eating 点亮) -->
+        <g class="mouth-eat">
+          <ellipse cx="110" cy="115" rx="8" ry="6.5" fill="#8E4A4A"/>
+          <ellipse cx="110" cy="117.5" rx="5" ry="3" fill="#F2A0A0"/>
+        </g>
+      </svg>
+    `
+  },
+
+  /* ---------------- 小白兔 ---------------- */
+  rabbit: {
+    name: '小白',
+    mouthY: 62.5,
+    svg: `
+      <svg class="pet-svg" viewBox="0 0 220 200">
+        <ellipse cx="110" cy="194" rx="46" ry="7" fill="#000" opacity="0.06"/>
+
+        <!-- 长耳朵 -->
+        <ellipse cx="86"  cy="48" rx="13" ry="40" fill="#FFFFFF"
+                 stroke="#E0E0E0" stroke-width="2" transform="rotate(-10 86 48)"/>
+        <ellipse cx="86"  cy="50" rx="6"  ry="28" fill="#FFC1D6" transform="rotate(-10 86 50)"/>
+        <ellipse cx="134" cy="48" rx="13" ry="40" fill="#FFFFFF"
+                 stroke="#E0E0E0" stroke-width="2" transform="rotate(10 134 48)"/>
+        <ellipse cx="134" cy="50" rx="6"  ry="28" fill="#FFC1D6" transform="rotate(10 134 50)"/>
+
+        <!-- 圆尾巴 -->
+        <g class="tail">
+          <circle cx="164" cy="160" r="15" fill="#FFFFFF" stroke="#E0E0E0" stroke-width="2"/>
+        </g>
+
+        <!-- 身体 -->
+        <ellipse cx="110" cy="160" rx="48" ry="32" fill="#FFFFFF" stroke="#E0E0E0" stroke-width="2"/>
+
+        <!-- 头 -->
+        <circle cx="110" cy="104" r="46" fill="#FFFFFF" stroke="#E0E0E0" stroke-width="2"/>
+
+        <!-- 胡须 -->
+        <path d="M62 106 h-16 M62 113 h-16 M158 106 h16 M158 113 h16"
+              stroke="#BCAAA4" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+
+        <g class="eye">
+          <ellipse cx="92" cy="100" rx="6" ry="8" fill="#5D4037"/>
+          <circle cx="94" cy="97" r="2" fill="#fff"/>
+        </g>
+        <g class="eye">
+          <ellipse cx="128" cy="100" rx="6" ry="8" fill="#5D4037"/>
+          <circle cx="130" cy="97" r="2" fill="#fff"/>
+        </g>
+
+        <ellipse cx="78"  cy="112" rx="9" ry="6" fill="#FFC1D6" opacity="0.8"/>
+        <ellipse cx="142" cy="112" rx="9" ry="6" fill="#FFC1D6" opacity="0.8"/>
+
+        <path d="M105 112 L115 112 L110 118 Z" fill="#F48FB1"/>
+
+        <g class="mouth-normal" stroke="#BCAAA4" stroke-width="2.5"
+           fill="none" stroke-linecap="round">
+          <path d="M110 118 v5"/>
+          <path d="M110 123 q-7 6 -12 0"/>
+          <path d="M110 123 q7 6 12 0"/>
+        </g>
+        <path class="mouth-happy" d="M100 120 q10 13 20 0 z" fill="#F48FB1"/>
+
+        <!-- 嘴:吃东西时张开(平时 opacity 是 0,由 .pet-stage.eating 点亮) -->
+        <g class="mouth-eat">
+          <ellipse cx="110" cy="125" rx="7.5" ry="6" fill="#B85A76"/>
+          <ellipse cx="110" cy="127" rx="4.6" ry="2.8" fill="#F7A8BE"/>
+        </g>
+      </svg>
+    `
+  }
+};
+
+/* ============================================================
+   每只宠物的对话库(话题 → 候选句子)
+   ============================================================ */
+const REPLIES = {
+  cat: {
+    greet:  ['喵~ 你好呀!', '今天过得怎么样?', '我一直在这里陪着你~'],
+    health: ['记得按时吃药哦~', '多喝水,身体棒棒的!', '今天测峰流速了吗?', '早点休息,别熬夜啦'],
+    mood:   ['开心~ 看到你心情就很好', '今天心情怎么样呀?', '有什么烦心事都可以告诉我'],
+    touch:  ['喵~ 摸摸头,好舒服!', '你点我啦?嘿嘿~', '呼噜呼噜~ 再摸一下嘛']
+  },
+  dog: {
+    greet:  ['汪! 你回来啦!', '嘿嘿,我等你好久了~', '我摇尾巴欢迎你!'],
+    health: ['一起去散步吧,运动对身体好!', '记得吃药,我陪着你!', '今天有好好喝水吗?'],
+    mood:   ['和你在一起我最开心啦!', '今天开心吗?不开心我陪你!', '来摸摸我的头吧~'],
+    touch:  ['汪汪! 尾巴摇起来了~', '嘿嘿,挠我下巴最舒服啦!', '你摸我,我就更爱你啦~']
+  },
+  rabbit: {
+    greet:  ['蹦蹦~ 你好呀!', '我是小白,很高兴见到你!', '嘿嘿,你来看我啦~'],
+    health: ['要按时吃饭睡觉哦~', '身体健康最重要啦!', '今天有好好照顾自己吗?'],
+    mood:   ['安安静静陪着你,也很好~', '开心一点嘛,我给你卖个萌!', '今天心情如何呀?'],
+    touch:  ['蹦蹦~ 摸摸我的耳朵吧', '嘿嘿,被你摸到了!', '我蹭蹭你~']
+  }
+};
+
+/* ============================================================
+   第 3 步核心:关键词规则表
+   ------------------------------------------------------------
+   宠物「听懂」你说话,靠的就是下面这张表。规则很简单:
+
+   只要你说的话里,含有 tags 里任意一个词,
+   宠物就从 reply 里随机挑一句回给你。
+
+   匹配顺序是「从第一行往下找」,找到就停。
+   所以要把更具体的规则放在前面(比如「头疼」比「头」更具体)。
+   ============================================================ */
+/* ============================================================
+   爱心币赚取规则 —— 唯一的出处
+   ------------------------------------------------------------
+   你的爱心币只有四个来源:吃药打卡、每日签到、记录峰流速、玩小游戏。
+   四项的数额全写在这一张表里,发币的代码、商店里的说明、聊天回复
+   统统从这里读。
+   ★ 想调价,只改下面的数字,别再到处翻代码 —— 改一处,文案全跟着变。
+   ============================================================ */
+const COIN_EARN = {
+  med:  10,   // 吃药打卡:早上 +10、晚上 +10(一天最多两次)
+  sign: 20,   // 每日签到:一天一次
+  pef:   8,   // 记录一次峰流速:早上 +8、晚上 +8(一天最多两次)
+  gameRound: 30,   // 玩小游戏:单局最多给这么多
+  gameDay:   80    // 玩小游戏:一天总共最多给这么多(防止一直打方块刷爆商店)
+};
+
+const RULES = [
+  /* 【爱心币】问「币从哪来」。四条来源的数额直接用 COIN_EARN 表拼出来,
+     以后调价,这段话术自动跟着变,不会说歪 */
+  { tags: ['爱心币', '赚币', '怎么赚', '怎么才有'],
+    reply: ['爱心币有四个来源:吃药打卡 +' + COIN_EARN.med
+            + '、每日签到 +' + COIN_EARN.sign
+            + '、记录峰流速 +' + COIN_EARN.pef
+            + '、陪我玩按分数给(每局最多 ' + COIN_EARN.gameRound
+            + ',每天最多 ' + COIN_EARN.gameDay + ')',
+            '打卡、签到、记录峰流速、陪我玩 —— 这四件事都能赚爱心币,'
+            + '其中签到最省力,一天一次 +' + COIN_EARN.sign,
+            '问我就对啦!爱心币是靠打卡、签到、记录峰流速、陪我玩赚来的,'
+            + '赚到了就去小卖部给我买好吃的~'] },
+
+  /* 【疑问句优先】放最前面:用户主动问「为什么」时,要回答解释,而不是记录 */
+  { tags: ['为什么监测', '为什么要监测', '为什么要测', '为什么要吹',
+           '为什么要记录', '监测峰流速', '监测的意义'],
+    reply: ['提前发现气道变化',
+            '给气道设置“红绿灯”,黄灯一亮就该留意了',
+            '帮助评估疗效、寻找诱因',
+            '峰流速仪,就像哮喘患者的“血压计”或“血糖仪”'] },
+
+  { tags: ['头疼', '头痛', '头晕', '胸闷', '气喘', '喘不上', '咳嗽', '不舒服', '难受'],
+    reply: ['是不是天气变化啦?记得按时吸药哦~',
+            '先坐下来,慢慢呼吸,再测一次峰流速看看吧',
+            '不舒服要说出来呀,别一个人扛着'] },
+
+  { tags: ['吃药', '服药', '吸药', '用药', '信必可', '茚达', '布地奈德'],
+    reply: ['今天吃药了吗?我陪你一起坚持!',
+            '规律用药最重要啦,吸完记得漱口~',
+            '不能感觉好一点就自己停药哦'] },
+
+  /* 新加的一条:必须排在原来那条「峰流速」规则前面,否则永远轮不到它 */
+  { tags: ['峰流速', '数据', '早晚'],
+    reply: ['我已经帮您记录咯!',
+            '早晚有记录峰流速值吗?'] },
+
+  { tags: ['吹气', '肺功能', '变异率', 'PEF'],
+    reply: ['早晚各吹一次,记得记下来哦~',
+            '今天的峰流速是多少呀?',
+            '数据要连续记才有意义,别偷懒~'] },
+
+  { tags: ['困', '累', '疲惫', '熬夜', '没睡好', '失眠', '晚安'],
+    reply: ['那早点睡吧,睡眠不足会影响肺功能哦',
+            '我陪你一起休息,晚安~',
+            '别熬夜啦,身体最要紧'] },
+
+  { tags: ['开心', '高兴', '愉快', '顺利', '真好', '不错'],
+    reply: ['看到你开心,我也好高兴!',
+            '嘿嘿,那今天要多笑几次~',
+            '好心情也是良药,继续保持呀'] },
+
+  { tags: ['难过', '伤心', '沮丧', '想哭', '压力', '焦虑', '紧张', '害怕'],
+    reply: ['抱抱你~ 我一直都在你身边',
+            '不开心的时候,慢慢深呼吸几次会好一点',
+            '说说看吧,我虽然只会喵,但我会认真听'] },
+
+  { tags: ['妈妈', '爸爸', '家人', '家里'],
+    reply: ['家人一直都很关心你呢~',
+            '有家人陪着你,就不会孤单啦'] },
+
+  { tags: ['你好', '在吗', '早上好', '晚上好', 'hi', 'hello'],
+    reply: ['我在这儿呢!', '你好呀,今天想跟我说什么?', '嘿嘿,一直在等你~'] },
+
+  { tags: ['谢谢', '感谢'],
+    reply: ['不用谢~ 这是我该做的!', '嘿嘿,被夸奖了,尾巴都翘起来啦'] },
+
+  { tags: ['再见', '拜拜', '我走了'],
+    reply: ['再见啦,记得照顾好自己!', '拜拜~ 我在这里等你回来', '那你先去忙,我等你'] }
+];
+
+/* ============================================================
+   状态与逻辑
+   ============================================================ */
+let currentPet = 'cat';   // 当前选中的宠物
+let hunger = 80;          // 饱腹度 0-100
+let happy  = 80;          // 心情度 0-100
+
+/* ---- 小卖部要用到的四个状态 ----
+   爱心币是「健康行为」和「喂养宠物」之间的兑换券:
+   打卡、签到、记峰流速、玩游戏赚币,币再去买粮。
+   注意:哪一项给多少币,全部写在下面的 COIN_EARN 表里,这里只存余额 */
+let coins = 60;              // 爱心币余额。给 60 当启动资金,免得一进门什么都买不起
+let bag   = {};              // 粮仓:买下还没喂的食物,形如 {fish: 2, bone: 1}
+let freeFoodDate = '';       // 免费口粮是哪天领的(存日期,换天自动恢复,不用手动重置)
+let gameCoin = { date: '', got: 0 };   // 今天玩游戏已经赚了多少币,用来防刷
+
+/* 第 4 步新增的三个「要记住」的状态 */
+let medLog   = {};          // 吃药打卡记录,形如 {'2026-09-16': {morning:true, evening:false}}
+let checkins = [];          // 已签到的日期,形如 ['2026-09-15', '2026-09-16']
+let lastTime = Date.now();  // 上次「结算到」的时间戳,用来算这段时间掉了多少状态
+
+/* 已经判定过「漏没漏打卡」的时段,形如 {'2026-09-17_morning': true}。
+   为什么要记:判定是幂等的 —— 每刷新一次界面都会查一遍,
+   没有这本账就会把同一个漏掉的早上重复扣好几次 */
+let missLog  = {};
+
+/* ============================================================
+   状态消耗规则(和爱心币那张表一样,数值集中写在这儿,改一个数就全生效)
+   ------------------------------------------------------------
+     · 饱腹:一天(24 小时)掉 80 —— 半天正好 40,每小时约 3.33
+     · 心情:每小时掉 2(一天 48)
+     · 玩耍:两种玩法各扣各的 ——
+             直接陪它玩一下:一次掉 20
+             打一局俄罗斯方块:一局掉 30(费脑子,更饿)
+             不管玩哪种,饱腹低于 30 都不让开始
+     · 漏打卡:每个时段漏一次,心情掉 30;早上晚上都漏,正好 60
+   ============================================================ */
+const HUNGER_PER_HOUR  = 80 / 24;   // 饱腹每小时掉多少
+const HAPPY_PER_HOUR   = 2;         // 心情每小时掉多少
+const PLAY_HUNGER_COST = 20;        // 「直接陪它玩一下」一次消耗多少饱腹
+const GAME_HUNGER_COST = 30;        // 打一局俄罗斯方块消耗多少饱腹
+const PLAY_MIN_HUNGER  = 30;        // 饱腹低于这个数,两种玩法都不让开始
+const MISS_MED_PENALTY = 30;        // 漏一次打卡扣多少心情
+const MISS_LOOKBACK_DAYS = 7;       // 最多往回追几天(你仨月不来,也不会一次扣穿)
+
+/* 峰流速记录,形如 {'2026-09-16': {morning: 320, evening: 350}}。
+   和吃药打卡按同一套规则归到某一天(凌晨 0-2 点算前一天) */
+let pefLog = {};
+
+const stageEl  = document.getElementById('stage');
+const pickerEl = document.getElementById('picker');
+
+/* 随机挑一句 */
+function pick(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+/* 生成顶部的宠物选择按钮 */
+function buildPicker() {
+  pickerEl.innerHTML = Object.keys(PETS).map(function (key) {
+    const active = key === currentPet ? ' active' : '';
+    return '<button class="pet-chip' + active + '" onclick="switchPet(\'' + key + '\')">'
+           + PETS[key].name + '</button>';
+  }).join('');
+}
+
+/* 把当前宠物的 SVG 画到舞台上。
+   外面包一层 .pet-hop,专门负责跑/跳/睡的整体位移,这样两种动画不会互相打架 */
+function renderPet() {
+  const p  = PETS[currentPet];
+  /* 食物停在「嘴」的高度上。三只宠物的嘴不一边高(小白最高、点点最低),
+     所以这个位置写在每只宠物的 mouthY 里,不写死。
+     +EAT_GAP 是往下挪一点 —— 齐平会挡住眼睛,挪 7px 刚好从眼睛底下过 */
+  const my = (p.mouthY || 58) + EAT_GAP;
+
+  stageEl.innerHTML =
+      '<div class="pet-hop">'
+    +   p.svg
+    /* 吃东西时嘴边那口饭。放在 .pet-hop 里面,这样它会跟着宠物一起晃 */
+    +   '<div class="eat-prop" id="eatProp" style="top:' + my + '%"></div>'
+    /* 咬东西时溅出来的碎屑 */
+    +   '<div class="crumbs" id="eatCrumbs" style="left:62%;top:' + my + '%">'
+    +     '<i class="crumb"></i><i class="crumb"></i><i class="crumb"></i>'
+    +   '</div>'
+    + '</div>';
+
+  document.getElementById('petName').innerText = p.name;
+  updateUI();
+}
+
+/* 切换宠物 */
+function switchPet(key) {
+  currentPet = key;
+  clearAction();          // 换宠物时,把正在跑/跳/睡的动画停掉
+  buildPicker();
+  renderPet();
+  document.getElementById('input').placeholder = '和' + PETS[key].name + '说点什么…';
+  showMessage(PETS[key].name + ':' + pick(REPLIES[key].greet));
+}
+
+/* 刷新状态条与名字下方的文字 */
+function updateUI() {
+  /* ★ 先按流逝的时间结算一次,再画界面。
+     放在这里是因为所有互动最后都会走到 updateUI ——
+     等于每一步都顺手把「这段时间该掉的」结掉,不用到处记得调 */
+  settleStatus();
+
+  document.getElementById('hungerBar').style.width = Math.round(hunger) + '%';
+  document.getElementById('happyBar').style.width  = Math.round(happy)  + '%';
+  /* 显示一律取整:饱腹是 3.33/小时 这样的小数攒出来的,
+     不取整就会在界面上看到「66.66666666666667%」 */
+  document.getElementById('hungerVal').innerText = Math.round(hunger) + '%';
+  document.getElementById('happyVal').innerText  = Math.round(happy)  + '%';
+
+  /* 状态文字:心情 + 正在做的动作 */
+  let mood = happy > 70 ? '开心' : happy > 40 ? '平静' : '需要陪伴';
+  /* 后面还排着几份就说清楚 —— 连点了三下却只看到一句「正在吃东西」,
+     会让人以为只喂进去一份,白点两下 */
+  const q = eatQueue.length ? '(还有 ' + eatQueue.length + ' 份)' : '';
+  /* 连着吃同一种会打折,这件事得写在脸上 —— 不然你会以为「怎么加得越来越少了」是坏了 */
+  const b = eatBoredLevel > 0 ? '(有点腻了)' : '';
+  if (stageEl.classList.contains('eating'))   mood = '正在吃东西' + b + q;
+  if (stageEl.classList.contains('meh'))      mood = '正在挑食…' + q;   // 不对口味时换个说法
+  if (eatResting)                             mood = '歇口气消化一下' + q;   // 两份之间的 4 秒
+  if (stageEl.classList.contains('running'))  mood = '正在奔跑';
+  if (stageEl.classList.contains('jumping'))  mood = '正在蹦跳';
+  if (stageEl.classList.contains('sleeping')) mood = '睡着啦';
+  document.getElementById('status').innerText = PETS[currentPet].name + '当前状态:' + mood;
+
+  saveGame();   // 状态一变就存档。放在这里,所有互动都自动带上了「记住」功能
+}
+
+/* 把爱心币余额刷到「今日健康」面板右上角。
+   和连续签到挤在一行,是因为它们本来就是同一类东西:你为自己做的事 */
+function paintCoins() {
+  const el = document.getElementById('signInfo');
+  if (el) el.innerText = '连续签到 ' + streakDays() + ' 天 · ♥ ' + coins;
+}
+
+/* 往聊天窗口里塞一个气泡。who 传 'pet' 靠左,'me' 靠右 */
+function pushBubble(text, who) {
+  const log = document.getElementById('log');
+  const div = document.createElement('div');
+  div.className = 'bubble ' + who;
+  div.innerText = text;
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;   // 自动滚到最新一条
+}
+
+/* 宠物说一句话 */
+function showMessage(text) {
+  pushBubble(text, 'pet');
+}
+
+/* ============================================================
+   第 6 步:用对话框「指挥」宠物
+   ------------------------------------------------------------
+   和 RULES 是同一套关键词匹配,区别只有一个:
+     RULES    → 匹配上了,宠物「说一句话」
+     COMMANDS → 匹配上了,宠物「做一个动作」
+   所以这是两张表,走两条路。send() 里先查 COMMANDS,查不到再查 RULES。
+   ============================================================ */
+
+/* 【顺序极其重要】从上往下找,第一条命中就停。
+   所以「别跑」必须排在「跑起来」前面,否则用户说"别跑了"它反而跑起来 */
+const COMMANDS = [
+  { act: 'stop',  tags: ['停下', '停下来', '停一停', '别跑', '别跳', '别动', '别闹', '安静'] },
+  { act: 'run',   tags: ['跑一跑', '跑起来', '跑一下', '跑两步', '跑两圈', '跑跑',
+                         '快跑', '小跑', '奔跑', '跑圈', '去跑'] },
+  { act: 'jump',  tags: ['跳一跳', '跳起来', '跳一下', '跳两下', '跳个', '跳高', '跳跳',
+                         '蹦一蹦', '蹦起来', '蹦一下', '蹦跶', '蹦蹦'] },
+  { act: 'wake',  tags: ['醒醒', '醒过来', '醒一醒', '醒来', '起床', '该起了', '叫醒',
+                         '别睡', '起来'] },
+  { act: 'sleep', tags: ['睡觉', '睡一会', '睡一觉', '睡一下', '睡个觉', '睡觉觉', '睡吧',
+                         '去睡', '快睡', '该睡了', '午睡', '躺下', '休息', '歇一会', '哄睡'] }
+];
+
+/* 在你打的字里找「命令」。找到返回动作名(run/jump/sleep/wake/stop),没有返回 null */
+function findCommand(text) {
+  const msg = text.toLowerCase();
+  for (let i = 0; i < COMMANDS.length; i++) {
+    const tags = COMMANDS[i].tags;
+    for (let j = 0; j < tags.length; j++) {
+      if (msg.indexOf(tags[j].toLowerCase()) !== -1) {
+        return COMMANDS[i].act;
+      }
+    }
+  }
+  return null;
+}
+
+/* 你打的字里找关键词,决定宠物回哪一句 */
+function findReply(text) {
+  const msg = text.toLowerCase();
+  for (let i = 0; i < RULES.length; i++) {
+    const tags = RULES[i].tags;
+    for (let j = 0; j < tags.length; j++) {
+      if (msg.indexOf(tags[j].toLowerCase()) !== -1) {
+        return pick(RULES[i].reply);
+      }
+    }
+  }
+  return null;   // 一个关键词都没匹配上
+}
+
+/* ============================================================
+   第 5 步:跑、跳、睡
+   ------------------------------------------------------------
+   三种动作的做法完全一样,只有三步:
+     ① stageEl.classList.add('running')  → 给舞台挂个类名,CSS 自动播放动画
+     ② showMessage(...)                  → 说一句话
+     ③ setTimeout(..., 毫秒)             → 到点把类名摘掉,动画自然停
+   JS 一行动画代码都没写,全靠 CSS 的 @keyframes。这就是「用类名切换状态」。
+   ============================================================ */
+let actTimer  = null;   // 跑/跳的「自动停」计时器
+let eatTimer  = null;   // 吃东西动画演完的计时器
+let yumTimer  = null;   // 吃完那两颗爱心的收尾计时器
+let sleepFrom = 0;      // 什么时候开始睡的,用来算它睡了多久
+
+/* 排队等着吃的几口。连喂多份时,一份接一份吃下去。
+   每一项长这样:{ foodId: 'fish', liked: true, say: '雪球:这个我最爱吃啦!' }
+   ★ 为什么要有这个队列:以前第二次喂食是「掐断重播」——
+     第一口刚吃两口就被打断,动画从 0 秒重头演一遍,看着像卡带。
+     现在嘴里这一口咬完,自动接下一口,接得严丝合缝 */
+let eatQueue  = [];
+
+/* 这会儿是不是正「歇口气」—— 刚咽下一份、还没开始下一份的那几秒。
+   这期间 stageEl 上没有 'eating' 类(动画演完了),但排着的饭还在,
+   所以凡是要靠类名判断「它是不是还忙着一顿饭」的地方,都得捎上这个旗子:
+     · startEating 入队判断(歇着时新喂的也要排队,不能插队)
+     · openShop 的「别打断」判断(歇着时开小卖部不能把饭清了)
+     · updateUI 的状态文字(显示「歇口气消化一下」) */
+let eatResting = false;
+
+/* 这会儿这一口「腻到第几档」(0 没腻 / 1 有点 / 2 很腻)。
+   数值上是饱腹和心情打折,文字上是状态栏那句「正在吃东西(有点腻了)」。
+   它跟着当前这一口走 —— clearAction 里会清掉,由 startEating 重新设 */
+let eatBoredLevel = 0;
+
+/* 「连着吃同一种会腻」的那本账:{ id: 'fish', n: 2, date: '2026-09-17' }
+   意思是「今天连着吃了 2 份小鱼干」。
+   n 是已吃份数,下一份会算成第 n+1 份,并据此打折。
+   ★ 中间吃了别的东西、或者过了午夜,这本账就作废(见 eatStreakNext)。
+     要存进存档 —— 不然刷新一下页面,连着吃十份也永远不打折 */
+let eatStreak = { id: '', n: 0, date: '' };
+
+/* 停掉当前动作。注意连着计时器一起清掉 ——
+   不清的话,上一次跑剩下的定时器会把你新发起的动作提前掐断。
+
+   keepQueue:要不要连「排队等着吃的饭」一起清掉。
+     不传(绝大多数地方)= 清掉 —— 因为凡是走到这里的,都是它要去做别的事了:
+       你说「跑一跑」、切宠物、打开小游戏……这些时候剩下那几口自然就不吃了。
+     传 true 的只有 startEating 自己 —— 它每吃一口都要先清一下场子,
+       要是顺手把队列清了,第二口永远等不到,连着喂就只吃得到第一口。 */
+function clearAction(keepQueue) {
+  stageEl.classList.remove('running', 'jumping', 'sleeping', 'eating',
+                           'like', 'meh', 'yum', 'meh-yum');
+  /* 上面一行要跟「所有加在 stageEl 上的状态类」保持同步 ——
+     漏掉一个,那个动画就会赖在身上不走(比如 meh-yum 不清,下次喂食还带着挑食的甩头) */
+  if (actTimer) { clearTimeout(actTimer); actTimer = null; }
+  if (eatTimer) { clearTimeout(eatTimer); eatTimer = null; }
+  if (yumTimer) { clearTimeout(yumTimer); yumTimer = null; }
+  sleepFrom = 0;
+  eatResting = false;    // 歇口气也一并收掉 —— 连着那个「4 秒后吃下一份」的定时器(eatTimer)一起
+  eatBoredLevel = 0;     // 这一口的腻度也收掉(下一口由 startEating 重新设)
+  if (!keepQueue) eatQueue = [];
+  /* 注意这里**不清** eatStreak:它记的是「今天连着吃了几份」,
+     跟眼前这一口演完没有关系 —— 清了的话连吃三份就永远不打折了 */
+  /* 以前这里还要把「睡觉」按钮的文字改回「睡觉」。
+     按钮删掉后这几行也必须一起删 —— 这就是删元素时最容易忘的一步:
+     回头搜一遍还有没有 JS 在 getElementById 它,不然一调用就报 null 错。
+     现在跑/跳/睡只能从聊天框下命令,所以按钮状态同步的代码整体作废了。 */
+}
+
+/* 一个动作持续多少毫秒后自己停 */
+function autoStop(ms) {
+  if (actTimer) clearTimeout(actTimer);
+  actTimer = setTimeout(function () {
+    clearAction();
+    updateUI();          // 让状态文字变回「心情」
+  }, ms);
+}
+
+/* ① 跑一跑:跑到右边、转身、再跑回来,来回跑 3 秒 */
+function doRun() {
+  const name = PETS[currentPet].name;
+  clearAction();
+  stageEl.classList.add('running');
+  happy  = Math.min(100, happy  + 4);
+  hunger = Math.max(0,   hunger - 3);     // 跑动会消耗体力
+  updateUI();
+  showMessage(name + ':' + pick(['踏踏踏~ 我跑起来啦!',
+                                 '追得上我吗?我跑得可快了',
+                                 '跑一跑,肺活量练起来~']));
+  autoStop(3200);
+}
+
+/* ② 跳一跳:蹲下 → 腾空 → 落地,连跳 3 下(0.7 秒 × 3 = 2.1 秒) */
+function doJump() {
+  const name = PETS[currentPet].name;
+  clearAction();
+  stageEl.classList.add('jumping');
+  happy = Math.min(100, happy + 4);
+  updateUI();
+  showMessage(name + ':' + pick(['看我一蹦三尺高!', '跳一跳,长高高~', '嘿咻!再来一下!']));
+  autoStop(2200);
+}
+
+/* ③ 睡觉:在它睡着的时候再说「睡觉」或说「醒过来」,就是叫醒。睡够 5 秒,心情 +8 */
+function doSleep() {
+  const name = PETS[currentPet].name;
+
+  /* 已经在睡 → 这次是叫醒 */
+  if (stageEl.classList.contains('sleeping')) {
+    const slept = Math.round((Date.now() - sleepFrom) / 1000);   // 先算睡了多久
+    clearAction();
+    if (slept >= 5) {
+      happy = Math.min(100, happy + 8);
+      showMessage(name + ':呼啊~ 睡得好香!(睡了 ' + slept + ' 秒,心情 +8)');
+    } else {
+      showMessage(name + ':唔…我才刚躺下呀,再让我睡会儿嘛…');
+    }
+    updateUI();
+    return;
+  }
+
+  clearAction();
+  stageEl.classList.add('sleeping');
+  sleepFrom = Date.now();
+  updateUI();
+  showMessage(name + ':' + pick(['呼…呼…我眯一小会儿~', '晚安…Zzz…', '有点困了,先睡一下下~']));
+}
+
+/* ============================================================
+   执行一条命令。
+   为什么不让 send() 直接调 doRun()?因为「打字下命令」比「点按钮」多出很多
+   现实情况:它可能正在睡、正在跑、本来就没在动。这些都得先判断,再决定做什么。
+   这就是「命令」和「动作」的区别 —— 命令要负责看现场。
+   ============================================================ */
+function doCommand(act) {
+  const name = PETS[currentPet].name;
+  const sleeping = stageEl.classList.contains('sleeping');
+  const running  = stageEl.classList.contains('running');
+  const jumping  = stageEl.classList.contains('jumping');
+
+  /* ---- 停:什么都要能停 ---- */
+  if (act === 'stop') {
+    if (!sleeping && !running && !jumping) {
+      showMessage(name + ':我本来就没在动呀~ 要不要我跑一跑?');
+      return;
+    }
+    clearAction();
+    updateUI();
+    showMessage(name + ':' + (sleeping ? '唔…那我起来啦' : '好,我停下来~'));
+    return;
+  }
+
+  /* ---- 醒:它已经醒着就告诉你一声,别白叫 ---- */
+  if (act === 'wake') {
+    if (!sleeping) {
+      showMessage(name + ':我一直醒着呢~ 要不要看我跳一跳?');
+      return;
+    }
+    doSleep();          // 它正在睡,这个函数会自动变成「叫醒」
+    return;
+  }
+
+  /* ---- 睡:已经在睡就别再睡一遍 ---- */
+  if (act === 'sleep') {
+    if (sleeping) {
+      showMessage(name + ':我已经睡着啦…(想叫我起来,就说「醒过来」)');
+      return;
+    }
+    doSleep();
+    return;
+  }
+
+  /* ---- 跑 / 跳:睡着的时候得先叫醒它,不然叫不动 ---- */
+  if (sleeping) {
+    showMessage(name + ':呼…呼…(它睡得太沉啦,先对它说「醒过来」吧)');
+    return;
+  }
+
+  if (act === 'run') {
+    if (running) { showMessage(name + ':我已经在跑啦,看我的~'); return; }
+    doRun();
+  } else if (act === 'jump') {
+    if (jumping) { showMessage(name + ':我正在蹦呢!你看高不高~'); return; }
+    doJump();
+  }
+}
+
+/* 让宠物做一个「开心」的表情 + 跳一下。
+   被喂食/被摸时也会走到这里 —— 顺手把正在跑/跳/睡的状态停掉,免得动画打架 */
+function happyReaction() {
+  clearAction();
+  stageEl.classList.add('happy');
+  setTimeout(function () { stageEl.classList.remove('happy'); }, 900);
+}
+
+/* ============================================================
+   吃东西:喂食之后的 2.4 秒(不对口味时 3 秒)
+   ------------------------------------------------------------
+   整段动画都写在 CSS 里(样式表「第 17 步」那一段),这里只做四件事:
+     ① 把食物换成对的那一样 —— 喂小鱼干就画小鱼干
+     ② 把碎屑染成这种食物的颜色
+     ③ 挂上 'eating' 类 + 口味类('like' / 'meh'),CSS 自动开演
+     ④ 时间到了摘掉类:爱吃的蹦一下冒两颗爱心,不爱吃的甩甩头冒一颗
+   ★ 两个时长必须和 CSS 里 foodEat / foodEatMeh 的时长一致,改一个要改两个。
+   ============================================================ */
+const EAT_LIKE_MS = 2400;   // 吃到爱吃的:三口,2.4 秒
+const EAT_MEH_MS  = 3000;   // 不对口味:先愣 0.75 秒再小口吃两口,共 3 秒
+/* 连吃两份中间歇多久。一口气连着塞三份看着像没牙似的,
+   歇这一下既像「消化消化」,也让你看清「这是第二份」 */
+const EAT_REST_MS = 4000;
+
+/* 食物比「嘴」低多少个百分比高度。
+   这个数是算出来的,不是随手填的:三只宠物的眼睛换算成像素后,
+   最低的那只(雪球)眼白下沿在 y≈85。食物 44px 见方、以「嘴高 + 9%」为中心时,
+   上沿落在 y≈91,离眼睛还有 5.5px 余量 —— 三只里最紧的一处也是安全的 */
+const EAT_GAP = 9;
+
+/* foodId 传食物 id('fish' / 'carrot' …);传 'free' 就是免费口粮那一碗。
+   liked 传它爱不爱吃这一口(不传就当爱吃 —— 免费口粮走的就是这条路):
+     爱吃 → 三口吃得飞快,尾巴甩得起劲,碎屑三粒三粒地掉,吃完蹦一下冒两颗爱心
+     不爱 → 先愣着看一眼再小口吃两口,眼睛眯起,尾巴懒得动,碎屑只掉两粒,吃完甩甩头
+   say 是它吃这一口时要说的话。连喂好几份时,这句话会跟着各自那一口走 ——
+     轮到哪一口才说哪一句,不会出现「才咬第一口就宣布三句都吃完了」
+   bored 是这一口「腻到第几档」(见 boredLevelOf)。
+     它不改动画 —— 吃相只分「爱吃」和「挑食」两个维度,腻是第三个维度,
+     硬塞进动画里会打架。腻体现在状态文字上(「正在吃东西(有点腻了)」)。
+   ★ 排队的那几口各自带着自己的 bored:第 3 份排队的时候已经腻了,
+     但轮到第 1 份演的时候还不腻 —— 这个值必须跟着那口饭走,不能共用一个 */
+function startEating(foodId, liked, say, bored) {
+  if (liked === undefined) liked = true;
+  if (bored === undefined) bored = 0;
+
+  /* ★ 它嘴里还有东西、或者正在两口之间歇着 → 这一口**排队**,绝不打断。
+     这就是「连续喂食」该有的样子:一份吃完歇一下,再吃下一份。
+     要是这里直接往下走,就会把第一口掐断、动画从头重播 —— 看着像卡带 */
+  if (stageEl.classList.contains('eating') || eatResting) {
+    eatQueue.push({ foodId: foodId, liked: liked, say: say, bored: bored });
+    updateUI();          // 让状态文字立刻显示「还有 N 份」,不然你会以为没点上
+    return;
+  }
+
+  clearAction(true);      // 停掉跑/跳/睡(但别动队列 —— 里面是等着吃的下一口)
+
+  const prop = document.getElementById('eatProp');
+  if (prop) prop.innerHTML = FOOD_ART[foodId] || FOOD_ART.free;
+
+  /* 碎屑染成这种食物的颜色 —— 三个 CSS 变量写在容器上,
+     吃小鱼干掉灰蓝渣、吃胡萝卜掉橙渣。不在表里的(比如 free)就退回米色 */
+  const crumbs = document.getElementById('eatCrumbs');
+  if (crumbs) {
+    const cc = FOOD_CRUMB[foodId] || FOOD_CRUMB.free;
+    crumbs.style.setProperty('--crumb-1', cc[0]);
+    crumbs.style.setProperty('--crumb-2', cc[1]);
+    crumbs.style.setProperty('--crumb-3', cc[2]);
+  }
+
+  /* 连着喂两次时,类名一直没变过,浏览器会认为「样式没变化」而不重播动画。
+     读一下 offsetWidth 逼它重新算一次布局,动画就会从头再演一遍 ——
+     这是重播 CSS 动画的标准小技巧,别删 */
+  void stageEl.offsetWidth;
+
+  eatBoredLevel = bored;        // 这一口腻到第几档,状态文字要读它(clearAction 刚清过,所以放在这之后)
+  stageEl.classList.add('eating');
+  stageEl.classList.add(liked ? 'like' : 'meh');   // 口味类:决定用哪一套吃相
+  updateUI();
+
+  /* 它边吃边说。放在挂类名之后,这样气泡和动画是同一拍出现的 */
+  if (say) showMessage(say);
+
+  eatTimer = setTimeout(function () {
+    eatTimer = null;
+    clearAction(true);                // 这一口收干净(类名 + 计时器),队列留着
+
+    /* ★ 队列里还有等着吃的 → 先歇 4 秒再接上。
+       爱心和蹦跳留到「整队都吃完」再冒一次 ——
+       要是每口都收尾,连吃三口就得 3×(2.4+1.4)=11 秒,太磨叽。
+       歇的这 4 秒里它站着喘口气,这会儿再喂的新一份照样排在后面 */
+    if (eatQueue.length) {
+      eatResting = true;
+      updateUI();          // 状态文字换成「歇口气消化一下(还有 N 份)」
+      eatTimer = setTimeout(function () {
+        eatTimer = null;
+        eatResting = false;
+        const next = eatQueue.shift();      // 歇够了这才把下一份端上来
+        startEating(next.foodId, next.liked, next.say, next.bored);
+      }, EAT_REST_MS);
+      return;
+    }
+
+    if (liked) {
+      happyReaction();                // 换上开心表情,蹦一下
+      stageEl.classList.add('yum');   // 头顶冒两颗爱心
+    } else {
+      /* 不爱吃就不蹦 —— 开心得没那么实在,只甩两下头。
+         注意这里不能调 happyReaction(),它会先 clearAction() 再挂 'happy',
+         换成挑食的表情反而怪 */
+      stageEl.classList.add('meh-yum');
+    }
+    updateUI();
+    yumTimer = setTimeout(function () {
+      stageEl.classList.remove('yum', 'meh-yum');
+      yumTimer = null;
+    }, 1400);
+  }, liked ? EAT_LIKE_MS : EAT_MEH_MS);
+}
+
+/* ---- 三个互动按钮 ----
+   ★ 「喂食」按钮现在打开小卖部(openShop);下面这个 feed() 是小卖部里
+     那份「免费口粮」:不花钱,但每天只有 1 份 ——
+     否则一直点就饱了,货架上的东西也就没人买了 */
+function feed() {
+  const name = PETS[currentPet].name;
+  settleStatus();                // 先结账再判断「饱没饱」,理由同 play()
+
+  if (!canFreeFood()) {
+    showMessage(name + ':今天的免费口粮已经领过啦,去货架上买点好吃的吧~');
+    return;
+  }
+  if (hunger >= 95) { showMessage(name + ':肚子已经饱啦,等饿了再领~'); return; }
+
+  freeFoodDate = todayStr();     // 记下「今天领过了」
+  hunger = Math.min(100, hunger + 15);
+  happy  = Math.min(100, happy  + 3);
+  updateUI();
+  closeShop();                   // 和粮仓那条路一模一样:先回主界面,再让它当着你面吃
+  /* 基础口粮三只都吃,所以第二个参数给 true(走「吃得香」那一套)。
+     它不是货架上的东西,没有 like 字段,也就谈不上挑食。
+     ★ 它也不参与「连着吃会腻」那本账,而且**不打断**连击:
+       每天就一份、三只都吃的口粮,谈不上吃腻;要是它把连击打断了,
+       你喂小鱼干 → 领口粮 → 再喂小鱼干,反倒变成「第 1 份」了 */
+  startEating('free', true, name + ':' + pick(['吃得津津有味~', '吃饱啦,谢谢你!', '咕噜咕噜,好满足~']));
+  renderShop();
+}
+
+/* 嗉子不够时的统一回应。两种玩法共用这一句,改文案不会漏掉一处。
+   askEl 是「把话说在哪儿」:
+     打方块时游戏浮层盖着整个界面,气泡在下头根本看不见,
+     所以那种场合要把这句话写进结算面板里 */
+function refuseHungry(askEl) {
+  const say = PETS[currentPet].name + ':肚子饿啦,先喂我一点再玩好不好~';
+  if (askEl) { askEl.innerText = say; return; }
+  showMessage(say);
+}
+
+/* 开始玩之前先问一句:结完账,嗉子够这次开销吗?
+   ★ 必须「先结账、再判断」。
+     不这么做就会出现这种事:你 6 小时没来,存档里还写着 25,
+     其实早该掉到 5 了 —— 它照样答应跟你玩,「饿着不让玩」等于没生效。
+   够 → 返回 true(放心往下玩);不够 → 说一句话并返回 false */
+function enoughHungerToPlay(askEl) {
+  settleStatus();
+  if (hunger >= PLAY_MIN_HUNGER) return true;
+  refuseHungry(askEl);   // 饿着还陪它玩,它会越玩越虚 —— 那不是养宠物,是使唤它
+  return false;
+}
+
+function play() {
+  const name = PETS[currentPet].name;
+
+  if (!enoughHungerToPlay()) return;
+
+  hunger = Math.max(0,   hunger - PLAY_HUNGER_COST);
+  happy  = Math.min(100, happy  + 15);
+  updateUI();
+  happyReaction();
+  showMessage(name + ':' + pick(['玩得好开心~', '再来一次!', '你的陪伴让我更快乐~']));
+}
+
+function chat() {
+  const name = PETS[currentPet].name;
+  const topics = REPLIES[currentPet];
+  const keys = Object.keys(topics);
+  const topic = pick(keys);
+  showMessage(name + ':' + pick(topics[topic]));
+}
+
+/* ---- 发送你输入的那句话 ---- */
+function send() {
+  const inputEl = document.getElementById('input');
+  const text = inputEl.value.trim();
+
+  if (!text) {
+    showMessage(PETS[currentPet].name + ':你还没打字呢~ 说点什么吧');
+    return;
+  }
+
+  pushBubble(text, 'me');     // 先把你的话显示在右边
+  inputEl.value = '';         // 清空输入框
+
+  const name = PETS[currentPet].name;
+
+  /* ① 先当成「命令」查一遍。查到了就直接执行动作,后面的聊天规则不再查 ——
+     这就是「一次输入只走一条路」,不然它可能又跑又回你一句话,乱套 */
+  const act = findCommand(text);
+  if (act) {
+    setTimeout(function () { doCommand(act); }, 420);
+    return;
+  }
+
+  /* ② 不是命令,再当成「聊天」去关键词表里查 */
+  const reply = findReply(text);
+
+  setTimeout(function () {         // 停顿一下再回,更像真人聊天
+    if (reply) {
+      happy = Math.min(100, happy + 5);
+      updateUI();
+      happyReaction();
+      showMessage(name + ':' + reply);
+    } else {
+      showMessage(name + ':这个词我还没学会…你可以命令我「跑一跑」「跳一跳」「睡觉」「醒过来」,'
+                     + '也可以问我吃药、峰流速、心情好不好~');
+    }
+  }, 420);
+}
+
+/* ---- 直接点宠物本体,它也会回应你 ---- */
+stageEl.addEventListener('click', function () {
+  const name = PETS[currentPet].name;
+  happy = Math.min(100, happy + 2);
+  updateUI();
+  happyReaction();
+  showMessage(name + ':' + pick(REPLIES[currentPet].touch));
+});
+
+/* ============================================================
+   第 4 步:让数据「记住」
+   ------------------------------------------------------------
+   localStorage 是浏览器自带的小仓库,关掉网页、关掉电脑都不会丢。
+   规矩只有一条:**只能存字符串**。
+   所以对象要先 JSON.stringify 转成文字存进去,读的时候再 JSON.parse 转回来。
+   ============================================================ */
+const SAVE_KEY = 'myPetSave_v1';
+
+/* 把 7 变成 '07',让日期格式统一成 2026-09-16 这种样子 */
+function pad2(n) {
+  return n < 10 ? '0' + n : '' + n;
+}
+
+/* 今天的日期字符串,用来当作打卡记录的「钥匙」 */
+function todayStr() {
+  const d = new Date();
+  return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+}
+
+/* 这个浏览器到底让不让存档?(无痕模式、部分浏览器会禁止) */
+function storageOK() {
+  try {
+    localStorage.setItem('__test__', '1');
+    localStorage.removeItem('__test__');
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+/* 读存档。读到了就返回 true,没有/坏了就返回 false(用默认值) */
+function loadGame() {
+  let raw = null;
+  try { raw = localStorage.getItem(SAVE_KEY); } catch (e) { raw = null; }
+  if (!raw) return false;
+
+  let data = null;
+  try { data = JSON.parse(raw); } catch (e) { return false; }
+  if (!data) return false;
+
+  if (PETS[data.pet]) currentPet = data.pet;
+  if (typeof data.hunger === 'number') hunger = data.hunger;
+  if (typeof data.happy  === 'number') happy  = data.happy;
+  medLog   = data.medLog   || {};
+  checkins = data.checkins || [];
+  lastTime = data.lastTime || Date.now();
+  pefLog   = data.pefLog   || {};   // 老存档里没有这一项,给个空对象就行
+
+  /* 小卖部的那四项。老存档里没有这些字段,|| 会给出默认值 ——
+     所以这次加功能,不会让之前存过的档读不出来 */
+  if (typeof data.coins === 'number') coins = data.coins;
+  bag          = data.bag          || {};
+  freeFoodDate = data.freeFoodDate || '';
+  gameCoin     = data.gameCoin     || { date: '', got: 0 };
+  /* 「连着吃同一种」这本账。老存档里没有,给个空账 ——
+     空账的 date 是 '',跟今天对不上,所以第一份永远算作「第 1 份」,不打折。
+     ★ 这本账必须存档:不存的话刷新一下页面,连吃十份也永远不打折 */
+  eatStreak    = data.eatStreak    || { id: '', n: 0, date: '' };
+
+  /* 「漏打卡扣心情」是这次新加的规则,老存档里没有这本账。
+     这时候不能从零开始查 —— 那样会把之前好几天全算成漏打卡,一进门心情就归零。
+     所以先把已经结束的时段统统标成「判过了」,只从今天往后开始算 */
+  if (data.missLog) {
+    missLog = data.missLog;
+  } else {
+    missLog = {};
+    seedMissLog();
+  }
+  return true;
+}
+
+/* 写存档。存失败也不报错,页面照常用,只是刷新后不保留 */
+function saveGame() {
+  /* ★ 这里**不再**刷新 lastTime。
+     它现在的含义是「状态结算到哪一刻了」,只有 applyTimePass 能推进它,
+     而且只按整分钟推进。以前这里写的是 lastTime = Date.now(),
+     等于每次存档都把不足一分钟的零头抹掉 —— 而存档非常频繁,
+     结果是「页面一直开着,宠物就永远不饿」,新规则会全被吃掉。 */
+  const data = {
+    pet: currentPet,
+    hunger: hunger,
+    happy: happy,
+    medLog: medLog,
+    checkins: checkins,
+    lastTime: lastTime,
+    pefLog: pefLog,
+    coins: coins,
+    bag: bag,
+    freeFoodDate: freeFoodDate,
+    gameCoin: gameCoin,
+    missLog: missLog,
+    eatStreak: eatStreak
+  };
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) {}
+}
+
+/* 你不在的时候,宠物会慢慢饿、慢慢想你 —— 按上面那张表算。
+   返回一句「你离开了多久、掉了多少」,变化小到看不出来就返回空字符串。
+   nowMs 可以不传(平时就是现在),传了就用传进来的时刻 —— 测试靠它拨表 */
+function applyTimePass(nowMs) {
+  const now = nowMs || Date.now();
+  const minutes = Math.floor((now - lastTime) / 60000);
+  if (minutes <= 0) return '';
+
+  const hBefore = hunger, pBefore = happy;
+  const hDrop = minutes / 60 * HUNGER_PER_HOUR;    // 饱腹:一天 80,半天 40
+  const pDrop = minutes / 60 * HAPPY_PER_HOUR;     // 心情:一小时 2
+  hunger = Math.max(0, hunger - hDrop);
+  happy  = Math.max(0, happy  - pDrop);
+
+  /* ★ 只把 lastTime 往前推「整分钟」,不足一分钟的零头留着下次接着算。
+     要是这里直接写成 = now,那点零头就被抹掉了 ——
+     而 updateUI 每隔几秒就会被叫一次,抹来抹去的结果是
+     「页面一直开着,宠物就永远不饿」,这条规则等于白写 */
+  lastTime += minutes * 60000;
+
+  const hReal = Math.round(hBefore - hunger);
+  const pReal = Math.round(pBefore - happy);
+  if (hReal <= 0 && pReal <= 0) return '';
+
+  return '你离开了 ' + minutes + ' 分钟,' + PETS[currentPet].name
+         + '的饱腹降了 ' + hReal + ' 点、心情降了 ' + pReal + ' 点,快来陪陪它~';
+}
+
+/* ---------- 漏打卡的惩罚 ---------- */
+
+/* 把一个日期对象变成 '2026-09-17' 这样的键。
+   medLog / pefLog / checkins 都用这个格式,所以统一走这一个函数 */
+function dateKeyOf(d) {
+  return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+}
+
+/* 某个「时段」的结束时刻(毫秒时间戳)。
+   dateKey 是这一天的记录日 —— 晚上那一顿跨午夜,所以它的结束落在次日。
+   时长直接从 MED_TIME 里算,不写死数字:以后改了打卡时段,这里自动跟着改 */
+function slotEndMs(dateKey, slot) {
+  const p = dateKey.split('-');
+  const w = MED_TIME[slot];
+  const start = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]), w.start, 0, 0, 0);
+  return start.getTime() + (w.end - w.start) * 3600000;
+}
+
+/* 查「有没有哪个时段已经过去了却没打卡」:漏一个扣 30 心情,早晚都漏正好 60。
+   ★ 幂等 —— 每次刷新界面都会查一遍,查过的时段记在 missLog 里,
+     没有这本账的话,同一个漏掉的早上会被反复扣分。
+   ★ 这里刻意不弹提示:它被 updateUI 每几秒叫一次,弹气泡会刷屏。
+     要告诉用户,由启动流程拿返回值去显示。
+   返回这一次扣掉的总数 */
+function settleMissedMed(nowMs) {
+  const now = nowMs || Date.now();
+  /* 从「上次结算到的那一刻」往回追,最多追 MISS_LOOKBACK_DAYS 天 ——
+     上限是为了「仨月没来」时不至于一次扣穿到底 */
+  const from = Math.max(lastTime, now - MISS_LOOKBACK_DAYS * 86400000);
+
+  const d = new Date(from);
+  d.setHours(0, 0, 0, 0);
+
+  let lost = 0;
+  while (d.getTime() <= now) {
+    const key = dateKeyOf(d);
+    ['morning', 'evening'].forEach(function (slot) {
+      if (slotEndMs(key, slot) > now) return;    // 这个时段还没结束,先不判
+      const tag = key + '_' + slot;
+      if (missLog[tag]) return;                  // 判过了,不重复扣
+      missLog[tag] = true;                       // 先记账,再判定
+      const rec = medLog[key];
+      if (!rec || !rec[slot]) lost += MISS_MED_PENALTY;   // 这个时段确实没打卡
+    });
+    d.setDate(d.getDate() + 1);
+  }
+
+  if (lost > 0) happy = Math.max(0, happy - lost);
+  return lost;
+}
+
+/* 第一次用这套规则时,把「过去已经结束的时段」一律标成判过了。不在这一步的话,
+   新用户(或老存档)第一次打开就会被算成前几天全在漏打卡,心情一进门就归零 */
+function seedMissLog(nowMs) {
+  const now = nowMs || Date.now();
+  const d = new Date(now - MISS_LOOKBACK_DAYS * 86400000);
+  d.setHours(0, 0, 0, 0);
+  while (d.getTime() <= now) {
+    const key = dateKeyOf(d);
+    ['morning', 'evening'].forEach(function (slot) {
+      if (slotEndMs(key, slot) <= now) missLog[key + '_' + slot] = true;
+    });
+    d.setDate(d.getDate() + 1);
+  }
+}
+
+/* 时间流逝 + 漏打卡,一次结清。
+   updateUI 的第一件事就是调它 —— 而所有互动最后都会走到 updateUI,
+   等于每一步都顺手把「这段时间该掉的」结掉,不用到处记得手动调。
+   返回值是给启动时的提醒用的(平时调用可以不管):
+     { away: 离线提醒那句话(没变化就是空串), missed: 这次因漏打卡扣掉的心情 } */
+function settleStatus(nowMs) {
+  const now = nowMs || Date.now();
+  const away   = applyTimePass(now);     // ① 按小时流逝:饱腹、心情
+  const missed = settleMissedMed(now);   // ② 漏打卡:每个时段 -30 心情
+  return { away: away, missed: missed };
+}
+
+/* ---------- 吃药打卡 ---------- */
+
+/* 打卡时段。只有落在窗口里才能打卡,其余时间点击无效。
+   数字是 24 小时制的小时;end 超过 24 表示「跨过午夜到第二天」。
+   例:evening 写成 13 → 26,就是 13:00 到次日 02:00。
+   ★ 想改时段,只改下面这两个数字就行,按钮和提示会自动跟着变。 */
+const MED_TIME = {
+  morning: { start: 6,  end: 13, label: '06:00–13:00' },   /* 中午 12-13 点也算早上 */
+  evening: { start: 13, end: 26, label: '13:00–次日 02:00' }
+};
+
+/* 现在几点?带小数(8 点 30 分 = 8.5),方便比较「几点几分」 */
+function nowHours(now) {
+  const d = now || new Date();
+  return d.getHours() + d.getMinutes() / 60;
+}
+
+/* 「相对今天这个记录日,现在走到第几个小时了?」
+   平时就是 0–24;但凌晨 0–2 点属于「昨天晚上的尾巴」,
+   所以看成 24–26 点 —— 这样跨午夜的那一顿也能正确落进窗口。
+   ★ 吃药的窗口、峰流速的窗口,判断「现在算几点」都走这一个函数,
+     两边永远不会对不上。 */
+function dayHours(now) {
+  const h = nowHours(now);
+  return h < MED_TIME.evening.end - 24 ? h + 24 : h;
+}
+
+/* 此刻能不能打这一顿的卡? */
+function inMedWindow(slot, now) {
+  const w = MED_TIME[slot];
+  const h = dayHours(now);
+  return h >= w.start && h < w.end;
+}
+
+/* 这一顿的峰流速,现在处于什么状态?
+     'now'  正当时段内 —— 记录,给爱心币
+     'late' 今天的时段已经过去了 —— 允许补记,但不再给币(数据能补,币不能补)
+     'wait' 还没到点 —— 先别填                                        */
+function pefSlotState(slot, now) {
+  const w = MED_TIME[slot];
+  const h = dayHours(now);
+  if (h >= w.start && h < w.end) return 'now';
+  return h < w.start ? 'wait' : 'late';
+}
+
+/* 这次打卡算「哪一天」的?
+   晚上窗口跨过午夜,所以凌晨 0-2 点补打的,算前一天晚上那一顿,
+   这样今天白天、晚上还能正常打今天的卡。 */
+function medDateKey() {
+  const d = new Date();
+  if (nowHours(d) < MED_TIME.evening.end - 24) d.setDate(d.getDate() - 1);
+  return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+}
+
+/* 取出「今天」的吃药记录,没有就新建一条 */
+function todayMed() {
+  const d = medDateKey();
+  if (!medLog[d]) medLog[d] = { morning: false, evening: false };
+  return medLog[d];
+}
+
+function markMed(slot) {
+  const name = PETS[currentPet].name;
+  const label = (slot === 'morning' ? '早上' : '晚上');
+
+  /* ① 先看时间:不在时段内,点了也无效 */
+  if (!inMedWindow(slot)) {
+    showMessage(name + ':' + label + '的药要在 ' + MED_TIME[slot].label
+                + ' 之间打卡哦,现在还不能打~');
+    return;
+  }
+
+  const m = todayMed();
+
+  if (m[slot]) {
+    showMessage(name + ':这一顿已经记过啦,不用重复打卡~');
+    return;
+  }
+
+  m[slot] = true;
+  happy = Math.min(100, happy + 5);
+  earnCoins(COIN_EARN.med);   // ★ 打卡给爱心币 —— 这是「现实里的坚持」换成「宠物口粮」的那一步
+  updateUI();          // updateUI 里会顺手存一次档
+  happyReaction();
+  renderHealth();
+  showMessage(name + ':' + label + '的药记上啦,真棒!我陪你一起坚持~ (爱心币 +'
+              + COIN_EARN.med + ')');
+}
+
+/* ---------- 每日签到 ---------- */
+
+function checkIn() {
+  const name = PETS[currentPet].name;
+  const today = todayStr();
+
+  if (checkins.indexOf(today) !== -1) {
+    showMessage(name + ':今天已经签到过啦,明天再来哦~');
+    return;
+  }
+
+  checkins.push(today);
+  happy = Math.min(100, happy + 10);
+  earnCoins(COIN_EARN.sign);   // 签到比打卡更难得(一天只有一次),所以给得多一点
+  updateUI();
+  happyReaction();
+  renderHealth();
+  showMessage(name + ':签到成功!已经连续 ' + streakDays() + ' 天啦,好厉害~ (爱心币 +'
+              + COIN_EARN.sign + ')');
+}
+
+/* 从今天往前一天天数,连着的算连续天数 */
+function streakDays() {
+  let count = 0;
+  const d = new Date();
+  while (true) {
+    const key = d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+    if (checkins.indexOf(key) === -1) break;
+    count++;
+    d.setDate(d.getDate() - 1);
+  }
+  return count;
+}
+
+/* ---------- 峰流速记录 ----------
+   峰流速(PEF)是「用力吹一口气能吹多快」,单位 L/min。
+   哮喘管理里它像一支「血压计」:早上起床后吹一次、晚上睡前吹一次,
+   两次的差能反映气道稳不稳。这里把数字存下来,顺手给爱心币。 */
+
+/* 取「今天」的峰流速记录,没有就新建一条。
+   日期归属和吃药打卡共用 medDateKey(),所以凌晨补记不会串到第二天 */
+function todayPef() {
+  const d = medDateKey();
+  if (!pefLog[d]) pefLog[d] = { morning: null, evening: null };
+  return pefLog[d];
+}
+
+/* 把输入框里的文字变成合法数值;不合法就返回 null。
+   合法范围 50–900 L/min —— 覆盖儿童到成人,
+   也顺手挡住「多按了一个 0」这类手滑。 */
+function parsePef(raw) {
+  const n = parseInt(String(raw).replace(/[^0-9]/g, ''), 10);
+  if (!isFinite(n) || n < 50 || n > 900) return null;
+  return n;
+}
+
+/* 日内变异率 =(晚 − 早)÷((晚 + 早)÷ 2)× 100%。
+   两次都记了才算得出来,否则返回 null。
+   临床上常拿 20% 当警戒线:超过说明气道波动偏大。 */
+function pefVariability(morning, evening) {
+  if (!morning || !evening) return null;
+  const avg = (morning + evening) / 2;
+  if (avg <= 0) return null;
+  return Math.abs(evening - morning) / avg * 100;
+}
+
+/* 点「记录」:把两个框里「此刻能记、还没记、填了数字」的都存下来。
+   只有正当时段的那一次给爱心币;补记的只存数据、不给币 ——
+   数据能补,币不能补。已经记过的可以改数值,但改值也不重复给币。 */
+function savePef() {
+  const name = PETS[currentPet].name;
+  const rec  = todayPef();
+  const plan = [
+    { slot: 'morning', label: '早上', el: document.getElementById('pefMorning') },
+    { slot: 'evening', label: '晚上', el: document.getElementById('pefEvening') }
+  ];
+
+  let saved = 0, fixed = 0, paid = 0;
+  const late = [], wait = [];
+
+  plan.forEach(function (p) {
+    const st  = pefSlotState(p.slot);
+    const raw = p.el ? p.el.value : '';
+    const val = parsePef(raw);
+
+    /* ① 已经记过的:值没变就不动;值变了就改过来 —— 但不会重复给币 */
+    if (rec[p.slot]) {
+      if (val !== null && val !== rec[p.slot]) { rec[p.slot] = val; fixed++; }
+      return;
+    }
+
+    /* ② 还没到点:填了也不收(不然早上就能把晚上的数一起交了) */
+    if (st === 'wait') { if (raw !== '') wait.push(p.label); return; }
+
+    /* ③ 空着,或数字不合法:当没填 */
+    if (val === null) return;
+
+    /* ④ 收下。正当时段的给币;时段已经过去的只算补记 */
+    rec[p.slot] = val;
+    saved++;
+    if (st === 'now') paid += earnCoins(COIN_EARN.pef);
+    else late.push(p.label);
+  });
+
+  /* 什么都没发生 —— 说清是哪种情况,别让人对着按钮发愣 */
+  if (!saved && !fixed) {
+    const canStill = plan.filter(function (p) {
+      return !rec[p.slot] && pefSlotState(p.slot) === 'now';
+    }).length;
+    let why;
+    if (wait.length)                        why = wait.join('、') + '还没到记录时间,到时候再填哦~';
+    else if (canStill)                      why = '先在框里填一个 50–900 的数字,再点「记录」吧~';
+    else if (rec.morning && rec.evening)    why = '今天早晚的峰流速都记好啦~';
+    else                                    why = '等到了记录时间再填哦~';
+    showMessage(name + ':' + why);
+    renderHealth();
+    return;
+  }
+
+  if (paid) happy = Math.min(100, happy + 3);       // 认真记录,也是在照顾自己
+  updateUI();
+  happyReaction();
+  renderHealth();
+
+  let msg = name + ':' + (saved ? '峰流速记下啦,我帮你存着~' : '峰流速改好啦~');
+  if (paid) msg += '(爱心币 +' + paid + ')';
+  if (late.length) msg += late.join('、') + '这次算补记,就不给币啦';
+  showMessage(msg);
+}
+
+/* 把打卡面板刷新成最新状态 */
+function renderHealth() {
+  const m = todayMed();
+
+  const btnM = document.getElementById('medMorning');
+  const btnE = document.getElementById('medEvening');
+  const btnS = document.getElementById('signBtn');
+
+  paintMedBtn(btnM, 'morning', m.morning);
+  paintMedBtn(btnE, 'evening', m.evening);
+
+  const signed = checkins.indexOf(todayStr()) !== -1;
+  btnS.className = 'mini-btn' + (signed ? ' done' : '');
+  btnS.innerText = signed ? '今日已签到' : '今日签到';
+
+  /* 「连续签到 X 天 · ♥ 爱心币」这一行由 paintCoins 单独负责,
+     因为爱心币不止签到会变,买粮、玩游戏也会 */
+  paintCoins();
+
+  /* 峰流速那两个框:能记就白底可填,已记就显示数值并变绿,没到点就灰掉 */
+  const rec = todayPef();
+  paintPefInput(document.getElementById('pefMorning'), 'morning', rec.morning);
+  paintPefInput(document.getElementById('pefEvening'), 'evening', rec.evening);
+
+  /* 峰流速底下那行小字:有两次数就报变异率,否则说清怎么记 */
+  const noteP = document.getElementById('pefNote');
+  if (noteP) {
+    const v = pefVariability(rec.morning, rec.evening);
+    if (v === null) {
+      noteP.innerHTML = '早晚各吹一次记下来(50–900 L/min),'
+                      + '两次都有数就能算出<b>日内变异率</b>';
+    } else {
+      noteP.innerHTML = '今天:早 <b>' + rec.morning + '</b> / 晚 <b>' + rec.evening
+                      + '</b> L/min · 日内变异率 <b>' + v.toFixed(1) + '%</b>'
+                      + (v >= 20 ? ' <span class="pef-warn">偏高,记得跟医生说说</span>' : '');
+    }
+  }
+
+  /* 面板底下那行小字:说清两个时段,以及此刻能打什么 */
+  const note = document.getElementById('medNote');
+  if (note) {
+    const canDo = [], didDo = [];
+    ['morning', 'evening'].forEach(function (slot) {
+      if (!inMedWindow(slot)) return;                 // 不在时段,不参与提示
+      const label = (slot === 'morning' ? '早上' : '晚上');
+      if (m[slot]) didDo.push(label); else canDo.push(label);
+    });
+    note.innerHTML = '打卡时段:<b>' + MED_TIME.morning.label + '</b> / <b>'
+                   + MED_TIME.evening.label + '</b><br>'
+                   + (canDo.length ? '现在可以打「' + canDo.join('、') + '」的卡'
+                    : didDo.length ? '「' + didDo.join('、') + '」的卡已经打过啦'
+                                   : '现在不在打卡时段内');
+  }
+}
+
+/* 画一个打卡按钮。两个按钮的判断完全一样,所以抽出来共用 */
+function paintMedBtn(btn, slot, done) {
+  const label = (slot === 'morning' ? '早上' : '晚上');
+  const open  = inMedWindow(slot);
+
+  if (done) {
+    btn.className = 'mini-btn done';
+    btn.innerText = label + ' 已吃';
+  } else if (open) {
+    btn.className = 'mini-btn';
+    btn.innerText = label + ' 打卡';
+  } else {
+    /* 不在时段内:变灰、虚线边,点了会提示 */
+    btn.className = 'mini-btn locked';
+    btn.innerText = label + ' 未到时间';
+  }
+}
+
+/* 画一个峰流速输入框。
+   有记录了 → 填上数字、变绿、锁住;
+   没记录   → 能填就白底等输入,没到点就灰掉并写「未到时间」。
+   ★ 注意:不随便清空框里的内容,免得用户正打字时被刷掉 */
+function paintPefInput(el, slot, val) {
+  if (!el) return;
+
+  if (val) {
+    el.value = val;
+    /* ★ 故意不禁用:数字打错了得能改回来。
+       改数值不会重复给币(savePef 里只对「第一次记下」发币) */
+    el.disabled = false;
+    el.className = 'pef-input done';
+    el.placeholder = '';
+    return;
+  }
+
+  const wait = pefSlotState(slot) === 'wait';
+  el.disabled = wait;
+  el.className = 'pef-input';
+  el.placeholder = wait ? '未到时间' : 'L/min';
+  if (wait) el.value = '';
+}
+
+/* ============================================================
+   小卖部:喂食界面里的那间小商店
+   ------------------------------------------------------------
+   设计上它和吃药打卡、签到、小游戏是同一根线:
+       健康行为 → 爱心币 → 买粮 → 宠物更饱更开心。
+   于是「照顾好自己」和「养好宠物」变成同一件事 —— 你按时吸药,
+   雪球就有饭吃。这是整个模块最想表达的东西。
+
+   FOODS 是唯一的数据源:货架、粮仓、价格、效果、嘴馋的对象,
+   统统从这张表读。想加一种新食物,往数组里加一行就行。
+   ============================================================ */
+const FOODS = [
+  /* 猫粮 —— like 写 'cat',意思是雪球吃这个有加成。
+     love 是「偏爱度」:同一个口味里再分两档 —— 3 = 最爱,2 = 爱吃。
+     ★ 「谁是最爱」是每只宠物的性格,和贵不贵、加多少没关系:
+       雪球是零食控 —— 最馋小鱼干(那个香),猫罐头是正餐,爱是爱,没那么疯;
+       点点认肉 —— 最爱牛肉粒,磨牙骨头是拿来磨牙的,爱啃但不是最馋那口;
+       小白兔是主食派 —— 最爱提摩西草球(干草才是兔子的正经饭),
+       胡萝卜条算加餐,甜是甜,没那么上头。
+     ★ 所以「最爱」和「饱腹多」并不是一回事:点点最爱的牛肉粒正好也管饱,
+       雪球最爱的小鱼干反而是零嘴。两件事分开写,才装得下三种性格 */
+  { id: 'fish',   name: '小鱼干',     icon: '🐟', price: 8,  fill: 18, joy: 5,  like: 'cat',    love: 3 },
+  { id: 'can',    name: '猫罐头',     icon: '🥫', price: 20, fill: 38, joy: 11, like: 'cat',    love: 2 },
+  /* 狗粮 —— 点点最爱牛肉粒 */
+  { id: 'bone',   name: '磨牙骨头',   icon: '🦴', price: 8,  fill: 18, joy: 5,  like: 'dog',    love: 2 },
+  { id: 'beef',   name: '牛肉粒',     icon: '🥩', price: 20, fill: 38, joy: 11, like: 'dog',    love: 3 },
+  /* 兔粮 —— 小白兔最爱提摩西草球 */
+  { id: 'carrot', name: '胡萝卜条',   icon: '🥕', price: 8,  fill: 18, joy: 5,  like: 'rabbit', love: 2 },
+  { id: 'grass',  name: '提摩西草球', icon: '🌿', price: 20, fill: 38, joy: 11, like: 'rabbit', love: 3 }
+];
+
+/* ============================================================
+   偏爱度与「吃腻了」——两张小表
+   ------------------------------------------------------------
+   ★ 偏爱度:爱不爱吃是一件事,爱到什么程度是另一件事。
+     同一个口味里,「最爱」比「爱吃」加得更多 ——
+     雪球吃到小鱼干会欢呼,吃到猫罐头也开心,只是提一句「我更爱小鱼干」。
+     ★ 哪一样算「最爱」写在上面 FOODS 的 love 里,和下面这张表分工明确:
+     上面管「谁是那只宠物的最爱」(雪球→小鱼干 / 点点→牛肉粒 / 小白兔→提摩西草球),
+     下面管「最爱比爱吃多给多少」。换谁当最爱,只动 FOODS 那一行,别处不用改。
+
+   ★ 吃腻了:连着吃同一种会腻,而且**饱腹和心情一起打折** ——
+     第 1 份原价、第 2 份 8 折、第 3 份起 6 折。
+     换一种口味、或者翻了一天,就重新变香(见 eatStreakNext)。
+   ============================================================ */
+const LOVE_BONUS = {
+  3: { fill: 1.6, joy: 6 },   // 最爱:吃得最香,加成最高
+  2: { fill: 1.4, joy: 3 },   // 爱吃:也香,但没那么疯
+  0: { fill: 1,   joy: 0 }    // 不对口:原样,而且走「挑食」那套吃相
+};
+
+/* 下标 = 腻到第几档(0 = 没腻)。第 3 份及以后都停在最后一档 */
+const BORED_FACTOR = [1, 0.8, 0.6];
+
+/* 标签上怎么写这两档 */
+const LOVE_NAME = { 3: '最爱', 2: '爱吃' };
+
+/* ============================================================
+   每种食物长什么样 —— 喂食动画里出现在宠物嘴边的那一张图。
+   ------------------------------------------------------------
+   商店卡片上用的是 emoji(🐟🥫),方便认;但吃到嘴边的那一张换成手绘矢量图,
+   风格才和宠物是一套的。七个都画在同一个 48×48 的框里,
+   所以不管画的是什么,放大到 46px 时大小自动一致。
+   ★ 想加新食物:FOODS 里加一行,这里配一张图,别的都不用动。
+   ============================================================ */
+const FOOD_ART = {
+
+  /* 免费口粮:一只小碗,堆着颗粒 */
+  free: `
+    <svg viewBox="0 0 48 48">
+      <ellipse cx="24" cy="42" rx="16" ry="3" fill="#000" opacity="0.07"/>
+      <g fill="#D9A96B">
+        <circle cx="18" cy="23" r="4.2"/><circle cx="25" cy="20" r="4.6"/>
+        <circle cx="31" cy="24" r="4"/><circle cx="22" cy="27" r="3.8"/>
+        <circle cx="29" cy="27.5" r="3.6"/>
+      </g>
+      <path d="M8 26 h32 q-1 16 -16 16 q-15 0 -16 -16 z"
+            fill="#E9A85F" stroke="#B87B36" stroke-width="1.8" stroke-linejoin="round"/>
+      <path d="M12 31 q12 4 24 0" stroke="#F6C88C" stroke-width="2.2"
+            fill="none" stroke-linecap="round"/>
+    </svg>`,
+
+  /* 小鱼干:身子 + 尾巴 + 鳍 */
+  fish: `
+    <svg viewBox="0 0 48 48">
+      <ellipse cx="26" cy="41" rx="14" ry="3" fill="#000" opacity="0.07"/>
+      <path d="M15 24 L3 13 L7 24 L3 35 Z" fill="#86B6D8" stroke="#3F6E96"
+            stroke-width="1.8" stroke-linejoin="round"/>
+      <ellipse cx="28" cy="24" rx="17" ry="11.5" fill="#AFD3EC" stroke="#3F6E96" stroke-width="1.8"/>
+      <path d="M26 13 q5 -7 9 -1" fill="#9AC4E2" stroke="#3F6E96"
+            stroke-width="1.5" stroke-linejoin="round"/>
+      <path d="M33 17 q6 7 0 14" stroke="#8CB6D6" stroke-width="2.2"
+            fill="none" stroke-linecap="round"/>
+      <circle cx="21" cy="20.5" r="2.4" fill="#2C4457"/>
+      <circle cx="21.8" cy="19.7" r="0.9" fill="#FFFFFF"/>
+      <path d="M14 28 q13 6 25 -2" stroke="#DCEDF8" stroke-width="2.4"
+            fill="none" stroke-linecap="round"/>
+    </svg>`,
+
+  /* 猫罐头:铁罐 + 橙色标签 + 顶上的拉环 */
+  can: `
+    <svg viewBox="0 0 48 48">
+      <ellipse cx="24" cy="41" rx="14" ry="3" fill="#000" opacity="0.07"/>
+      <rect x="9" y="12" width="30" height="28" rx="3" fill="#DCE1E7"
+            stroke="#94A0AC" stroke-width="1.8"/>
+      <rect x="10.5" y="18" width="27" height="14" fill="#F0A45C"/>
+      <path d="M10.5 18 h27 M10.5 32 h27" stroke="#94A0AC" stroke-width="1.4"/>
+      <g fill="#6B4E36">
+        <circle cx="18" cy="25" r="1.9"/><circle cx="24.5" cy="23" r="1.6"/>
+        <circle cx="30" cy="26" r="1.8"/>
+      </g>
+      <ellipse cx="24" cy="12" rx="15" ry="4.6" fill="#EEF2F6"
+               stroke="#94A0AC" stroke-width="1.8"/>
+      <ellipse cx="24" cy="12" rx="10" ry="2.8" fill="#CFD7DE"/>
+      <path d="M18 12 q6 -2.4 12 0" stroke="#8C99A6" stroke-width="1.6"
+            fill="none" stroke-linecap="round"/>
+    </svg>`,
+
+  /* 磨牙骨头:两端各两个圆鼓,中间一根棍。
+     没有描边 —— 改成「深色垫底 + 浅色盖面」两层,重叠处才不会露出一圈弧线 */
+  bone: `
+    <svg viewBox="0 0 48 48">
+      <ellipse cx="24" cy="41" rx="14" ry="3" fill="#000" opacity="0.07"/>
+      <g fill="#C9A96A">
+        <circle cx="14" cy="17" r="8"/><circle cx="14" cy="31" r="8"/>
+        <circle cx="34" cy="17" r="8"/><circle cx="34" cy="31" r="8"/>
+        <rect x="10" y="13" width="28" height="22" rx="7"/>
+      </g>
+      <g fill="#F6E7C6">
+        <circle cx="14" cy="17" r="6"/><circle cx="14" cy="31" r="6"/>
+        <circle cx="34" cy="17" r="6"/><circle cx="34" cy="31" r="6"/>
+        <rect x="12" y="15" width="24" height="18" rx="6"/>
+      </g>
+      <path d="M13 28 q5 -4 10 -1" stroke="#FFF6E2" stroke-width="1.8"
+            fill="none" stroke-linecap="round" opacity="0.8"/>
+    </svg>`,
+
+  /* 牛肉粒:一块带油花的肉 */
+  beef: `
+    <svg viewBox="0 0 48 48">
+      <ellipse cx="24" cy="41" rx="14" ry="3" fill="#000" opacity="0.07"/>
+      <rect x="9" y="11" width="30" height="28" rx="8" fill="#C25B45"
+            stroke="#8E3A28" stroke-width="1.8"/>
+      <path d="M16 15 q5 -3 10 -1" stroke="#E0A79A" stroke-width="2"
+            fill="none" stroke-linecap="round"/>
+      <path d="M15 21 q7 4 15 -1" stroke="#EFC6B8" stroke-width="2.6"
+            fill="none" stroke-linecap="round"/>
+      <path d="M14 30 q8 5 16 0" stroke="#EFC6B8" stroke-width="2.6"
+            fill="none" stroke-linecap="round"/>
+    </svg>`,
+
+  /* 胡萝卜条:橙色锥形 + 三片绿叶 */
+  carrot: `
+    <svg viewBox="0 0 48 48">
+      <ellipse cx="24" cy="42" rx="13" ry="3" fill="#000" opacity="0.07"/>
+      <path d="M24 44 L15 16 Q24 10 33 16 Z" fill="#F08A3C" stroke="#C4642A"
+            stroke-width="1.8" stroke-linejoin="round"/>
+      <g stroke="#C4642A" stroke-width="1.6" stroke-linecap="round" opacity="0.55">
+        <path d="M20 22 h8"/><path d="M19 29 h10"/><path d="M21 36 h6"/>
+      </g>
+      <g stroke="#5FA463" stroke-width="3.2" fill="none" stroke-linecap="round">
+        <path d="M24 14 q-2 -8 -8 -10"/>
+        <path d="M24 14 q2 -8 8 -10"/>
+        <path d="M24 13 v-8"/>
+      </g>
+    </svg>`,
+
+  /* 提摩西草球:一团草,缠成球 */
+  grass: `
+    <svg viewBox="0 0 48 48">
+      <ellipse cx="24" cy="42" rx="14" ry="3" fill="#000" opacity="0.07"/>
+      <circle cx="24" cy="26" r="16" fill="#BBD07C" stroke="#7E9B45" stroke-width="1.8"/>
+      <g stroke="#8FAF52" stroke-width="2" fill="none" stroke-linecap="round">
+        <path d="M24 41 q-4 -12 1 -26"/>
+        <path d="M17 38 q-3 -10 3 -22"/>
+        <path d="M31 38 q4 -10 -2 -22"/>
+        <path d="M13 30 q4 -8 12 -10"/>
+        <path d="M35 30 q-4 -8 -12 -10"/>
+      </g>
+      <path d="M15 18 q7 -5 16 -3" stroke="#D4E3A6" stroke-width="2.4"
+            fill="none" stroke-linecap="round"/>
+    </svg>`
+};
+
+/* ============================================================
+   每种食物掉什么颜色的渣 —— 三个一组,深浅错开才像渣,不像三块色卡。
+   喂食动画里那三粒碎屑的颜色就来自这里,由 startEating() 写成 CSS 变量。
+   ★ 想加新食物:FOODS 加一行、FOOD_ART 配张图、这里配三个色,就齐了。
+   ============================================================ */
+const FOOD_CRUMB = {
+  free:   ['#E0BE8A', '#D3AC74', '#EBD2A6'],   // 基础口粮:谷物的米黄
+  fish:   ['#AFC0CC', '#93A8B8', '#C8D6DF'],   // 小鱼干:银灰
+  can:    ['#E08A5E', '#C9713F', '#EEA87F'],   // 猫罐头:橙红的肉
+  bone:   ['#E7DFCE', '#D5CAB4', '#F2ECDF'],   // 磨牙骨头:乳白
+  beef:   ['#A9563F', '#8E4632', '#C06C52'],   // 牛肉粒:深红棕
+  carrot: ['#F0954A', '#DC7F35', '#F7B36E'],   // 胡萝卜条:橙
+  grass:  ['#9BBE6B', '#84A855', '#B3D189']    // 提摩西草球:绿
+};
+
+/* 这只宠物对这份食物的偏爱度:3 = 最爱,2 = 爱吃,0 = 不对口。
+   不对口就是 0,所以「爱不爱吃」和「爱到什么程度」用一个函数就说明白了 */
+function loveOf(food, pet) {
+  if (!food || food.like !== pet) return 0;
+  return food.love || 2;      // 没写 love 的(比如以后新加的)按「爱吃」算
+}
+
+/* 这只宠物最对口的是哪一样?挑食时用来把话说明白:
+   「唔…不是我最爱的猫罐头」比「这个不好吃」体贴得多。
+   ★ 取的是 love 最高的那一样,不是「第一个对口的」——
+     不然 FOODS 里谁排在前面谁就成了「最爱」,加一行新食物就会被顶掉 */
+function favoriteFood(pet) {
+  let best = null;
+  for (let i = 0; i < FOODS.length; i++) {
+    if (loveOf(FOODS[i], pet) > loveOf(best, pet)) best = FOODS[i];
+  }
+  return best;
+}
+
+/* 玩一局赚多少币:每 GAME_COIN_PER 分给 1 个,单局封顶、每天再封顶。
+   两个上限都在 COIN_EARN 表里,这里不再写死数字 */
+const GAME_COIN_PER = 20;
+
+/* 按 id 找一种食物,找不到返回 null */
+function findFood(id) {
+  for (let i = 0; i < FOODS.length; i++) if (FOODS[i].id === id) return FOODS[i];
+  return null;
+}
+
+/* ---------- 「连着吃同一种会腻」这本账 ---------- */
+/* 这会是连着吃的第几份?只算、不改 —— 真正记账交给 markEaten()。
+   中间插了别的东西吃、或者翻了一天,连击就断了,从 1 重新数。
+   ★ 免费口粮不参与这本账:它天天都能领、三只宠物都吃,谈不上「连着吃腻了」 */
+function eatStreakNext(id) {
+  const today = todayStr();
+  const prev  = (eatStreak.date === today && eatStreak.id === id) ? eatStreak.n : 0;
+  return prev + 1;
+}
+
+/* 记一笔「刚咽下这种」。n 由 eatStreakNext() 算好传进来 ——
+   在两处各算一遍的话,迟早会算出两个不一样的数 */
+function markEaten(id, n) {
+  eatStreak = { id: id, n: n, date: todayStr() };
+}
+
+/* 连着吃的第几份 → 腻到第几档。第 1 份不腻,第 2 份有点,第 3 份起很腻 */
+function boredLevelOf(n) {
+  return Math.min(Math.max(1, Math.round(n) || 1) - 1, BORED_FACTOR.length - 1);
+}
+
+/* 这份食物喂给当前宠物,实际加多少?
+   饱腹 =食物 fill × 偏爱度加成 × 腻度折扣,心情同理。
+   streakN 传「这会是连着吃的第几份」(从 1 数);
+     不传就按第 1 份算 —— 商店画货架时就是这么用的:显示「下一份能加多少」。
+   ★ 这是个纯函数(只算数、不改任何状态),所以可以单独拎出来测 */
+function foodEffect(food, pet, streakN) {
+  if (!food) {
+    return { fill: 0, joy: 0, liked: false, love: 0, streak: 1, bored: 1, boredLevel: 0 };
+  }
+
+  const love  = loveOf(food, pet);
+  const bonus = LOVE_BONUS[love] || LOVE_BONUS[0];
+  const n     = Math.max(1, Math.round(streakN) || 1);
+  const lv    = boredLevelOf(n);
+  const bored = BORED_FACTOR[lv];
+
+  return {
+    fill:  Math.round(food.fill * bonus.fill * bored),
+    joy:   Math.round((food.joy + bonus.joy) * bored),
+    liked: love > 0,        // 对口 = 走「吃得香」那套吃相
+    love:  love,            // 3 最爱 / 2 爱吃 / 0 不对口
+    streak: n,              // 连着吃的第几份
+    bored: bored,           // 折扣(1 = 不打折)
+    boredLevel: lv          // 腻到第几档(0 没腻 / 1 有点 / 2 很腻)
+  };
+}
+
+/* 今天还能领免费口粮吗?比日期字符串就行 —— 换天自动恢复,不需要定时重置 */
+function canFreeFood() {
+  return freeFoodDate !== todayStr();
+}
+
+/* 加币。所有进账都走这一个口子,以后想加记账、加上限只改这里 */
+function earnCoins(n) {
+  if (!(n > 0)) return 0;
+  coins += n;
+  return n;
+}
+
+/* 玩游戏赚币:每 GAME_COIN_PER 分 1 币,单局封顶 COIN_EARN.gameRound,
+   当天封顶 COIN_EARN.gameDay。
+   返回这一局实际赚到多少(到上限了可能只给一部分,甚至 0) */
+function gameCoinGain(score) {
+  const today = todayStr();
+  if (gameCoin.date !== today) gameCoin = { date: today, got: 0 };   // 跨天自动清零
+  const want = Math.min(COIN_EARN.gameRound, Math.floor(score / GAME_COIN_PER));
+  const left = Math.max(0, COIN_EARN.gameDay - gameCoin.got);
+  const got  = Math.min(want, left);
+  gameCoin.got += got;
+  return got;
+}
+
+/* ---------- 买一份,放进粮仓 ---------- */
+function buyFood(id) {
+  const name = PETS[currentPet].name;
+  const food = findFood(id);
+  if (!food) return;                          // 表里没有这个 id,直接不理
+
+  if (coins < food.price) {
+    showMessage(name + ':爱心币还差 ' + (food.price - coins) + ' 个哦,'
+              + '打卡、签到、记峰流速、陪我玩都能赚到~');
+    return;
+  }
+
+  coins -= food.price;
+  bag[id] = (bag[id] || 0) + 1;
+  updateUI();                                 // updateUI 里带存档,所以会自动记住
+  renderShop();
+  showMessage(name + ':' + food.icon + ' ' + food.name + '买好啦,放进粮仓咯!');
+}
+
+/* 它吃这一口时要说的话。四种口气,先看腻没腻、再看爱到什么程度:
+     腻了      → 嘴上抱怨两句,但还是吃完
+     最爱      → 欢呼
+     爱吃      → 高兴,顺口提一句「我更爱那样」
+     不对口    → 挑食,但客客气气
+   ★ 抽成函数是因为 feedFood 里那串三目嵌套已经绕得看不清了,
+     搬出来还能单独测「喂小鱼干到底说的是哪一句」 */
+function eatLine(food, eff) {
+  const fav = favoriteFood(currentPet);
+
+  if (eff.boredLevel > 0) {
+    /* 三句都把「腻」字说出来 —— 这个折扣是它自己抱怨出来的,
+       用户才知道「怎么加得少了」不是坏了 */
+    return pick([
+      '唔…又是' + food.name + '呀,有点吃腻了…',
+      '又是' + food.name + ',吃腻啦…不过我还是吃完~',
+      '换一种好不好嘛,这个我都连着吃腻了~'
+    ]);
+  }
+  if (eff.love === 3) {
+    return pick(['这个我最爱吃啦!谢谢你~', '唔!是我最喜欢的味道!', '好吃好吃,还要还要~']);
+  }
+  if (eff.love === 2) {
+    /* 三句都点一次「最爱」的名字 —— 这样「没那么爱」这件事每次都说得清楚,
+       而不是三句里只有一句提、看着像随机 */
+    return fav
+      ? pick(['嗯~' + food.name + '也不错,不过我最爱的还是' + fav.name + '~',
+              '好吃!只是我更爱' + fav.name + '~',
+              '比' + fav.name + '差一点点,但我也喜欢~'])
+      : pick(['嗯~' + food.name + '也不错,谢谢!', '好吃!', '我吃得很开心~']);
+  }
+  return fav
+    ? pick(['唔…不是我最爱的' + fav.name + ',不过我还是吃完啦~',
+            '这个…还行吧。下次给我买' + fav.name + '好不好?',
+            '不是我的菜,但我慢慢吃完了,谢谢啦~'])
+    : pick(['这个…还行吧,谢谢啦~', '我慢慢吃完了~']);
+}
+
+/* ---------- 从粮仓里喂掉一份 ---------- */
+function feedFood(id) {
+  const name = PETS[currentPet].name;
+  const food = findFood(id);
+  if (!food || !bag[id]) return;              // 粮仓里没有,不理
+
+  settleStatus();                             // 先结账再判断「饱没饱」,理由同 play()
+
+  if (hunger >= 95) { showMessage(name + ':肚子已经饱啦,晚点再喂我吧~'); return; }
+
+  /* ★ 先问「这是连着吃的第几份」,再算效果 ——
+     第 2 份起要打 8 折、第 3 份起 6 折,这个折扣就是「吃腻了」。
+     顺序不能反:效果算完了才去记账,那这一份就永远按不打折算 */
+  const streak = eatStreakNext(food.id);
+  const eff    = foodEffect(food, currentPet, streak);
+
+  bag[id] -= 1;
+  if (bag[id] <= 0) delete bag[id];           // 吃光了就从粮仓里划掉,免得留个 ×0
+  markEaten(food.id, streak);                 // 记一笔,下一份就开始腻了
+
+  hunger = Math.min(100, hunger + eff.fill);
+  happy  = Math.min(100, happy  + eff.joy);
+  updateUI();
+
+  /* ★ 关键一步:先收起小卖部,再叫它开吃。
+     小卖部是铺满整张卡片的不透明浮层(z-index:20)。它要是还开着,
+     宠物就在浮层背后吃 —— 动画一秒不差地全演了,可你一眼都看不见。
+     所以「喂」这个动作的真正含义是:关上柜台,回主界面看它吃。 */
+  closeShop();
+
+  /* 它这一口要说的话,先算好再一起交给 startEating ——
+     连喂好几份时,每句话会跟着各自那一口走,轮到谁才说谁。
+     台词由 eatLine() 按「腻没腻 + 爱到什么程度」挑 */
+  const say = name + ':' + eatLine(food, eff);
+
+  /* ★ 喂什么演什么:对口不对口是两套吃相;最后一个参数把这口的「腻度」也带上,
+     状态文字才好写「正在吃东西(有点腻了)」 */
+  startEating(food.id, eff.liked, say, eff.boredLevel);
+  renderShop();                           // 粮仓少了一份,顺手把柜台刷新好,下次打开就是新的
+}
+
+/* ---------- 把整个小卖部画一遍 ---------- */
+function renderShop() {
+  const grid  = document.getElementById('shopGrid');
+  const bagEl = document.getElementById('shopBag');
+  if (!grid || !bagEl) return;
+
+  const name = PETS[currentPet].name;
+
+  document.getElementById('shopTitle').innerText = '小卖部 · 给' + name + '买点好吃的';
+  document.getElementById('shopCoins').innerText = coins;
+  document.getElementById('shopSecFood').innerText =
+    '货架 · 标「最爱」的最划算;连着吃同一种会腻,换着来';
+
+  /* 赚币说明:数额全部从 COIN_EARN 表读,改表这里自动跟着变,不会写歪 */
+  const tipEl = document.getElementById('shopTip');
+  if (tipEl) {
+    tipEl.innerText = '爱心币怎么来:吃药打卡 +' + COIN_EARN.med
+      + ' · 每日签到 +' + COIN_EARN.sign
+      + ' · 记录峰流速 +' + COIN_EARN.pef
+      + ' · 陪我玩按分数给(每局最多 ' + COIN_EARN.gameRound
+      + ',每天最多 ' + COIN_EARN.gameDay + ')';
+  }
+
+  /* 免费口粮那一行:领没领过,文案和灰不灰都跟着变 */
+  const freeBtn = document.getElementById('freeFoodBtn');
+  const can = canFreeFood();
+  freeBtn.className = 'shop-free' + (can ? '' : ' used');
+  freeBtn.disabled  = !can;
+  document.getElementById('freeFoodT').innerText =
+    can ? '免费口粮(每天 1 份)' : '免费口粮 · 今天已经领过了';
+  document.getElementById('freeFoodS').innerText =
+    can ? '不花钱,饱腹 +15 · 心情 +3' : '明天再来,或者去货架买点好吃的';
+
+  /* 货架:六种食物。按偏爱度排 —— 最爱的排最前,标签也分「最爱」和「爱吃」两档。
+     ★ 卡片上的「饱腹 +N / 心情 +N」写的是**下一份会加到的真实值**:
+       连着吃了两份的话,这里会自己变成打了 8 折的数,而且多一行小字说明 ——
+       腻了这件事,在你掏钱之前就该看得见 */
+  const list = FOODS.slice().sort(function (a, b) {
+    return loveOf(b, currentPet) - loveOf(a, currentPet);
+  });
+
+  grid.innerHTML = list.map(function (f) {
+    const eff  = foodEffect(f, currentPet, eatStreakNext(f.id));
+    const poor = coins < f.price;            // 钱不够就把按钮真的禁掉
+    const tag  = LOVE_NAME[eff.love];        // 不对口时是 undefined,那就没有标签
+    const best = eff.love === 3;
+    return '<div class="food-card' + (eff.love ? ' liked' : '') + (best ? ' best' : '') + '">'
+         +   (tag ? '<span class="food-tag' + (best ? ' best' : '') + '">'
+                    + name + tag + '</span>' : '')
+         +   '<div class="food-ico">' + f.icon + '</div>'
+         +   '<div class="food-name">' + f.name + '</div>'
+         +   '<div class="food-eff">饱腹 +' + eff.fill + ' · 心情 +' + eff.joy + '</div>'
+         +   (eff.bored < 1
+                ? '<div class="food-warn">这是第 ' + eff.streak + ' 份 · 打 '
+                  + Math.round(eff.bored * 10) + ' 折</div>'
+                : '')
+         +   '<button class="food-buy"' + (poor ? ' disabled' : '')
+         +     ' onclick="buyFood(\'' + f.id + '\')">♥ ' + f.price + '</button>'
+         + '</div>';
+  }).join('');
+
+  /* 粮仓:只列买了还没喂的。空的时候说一句人话,别留一片空白 */
+  const owned = FOODS.filter(function (f) { return bag[f.id] > 0; });
+  if (!owned.length) {
+    bagEl.innerHTML = '<div class="bag-empty">粮仓是空的。在上面挑一样买下来,就会出现在这里。</div>';
+    return;
+  }
+  bagEl.innerHTML = owned.map(function (f) {
+    const eff = foodEffect(f, currentPet, eatStreakNext(f.id));
+    return '<div class="bag-item">'
+         +   '<span class="bag-ico">' + f.icon + '</span>'
+         +   '<span class="bag-name">' + f.name
+         +     '<span class="bag-num">还剩 ' + bag[f.id] + ' 份 · 饱腹 +' + eff.fill
+         +     ' · 心情 +' + eff.joy
+         +     (eff.bored < 1 ? ' · 吃腻了,打 ' + Math.round(eff.bored * 10) + ' 折' : '')
+         +     '</span>'
+         +   '</span>'
+         +   '<button class="bag-feed" onclick="feedFood(\'' + f.id + '\')">喂</button>'
+         + '</div>';
+  }).join('');
+}
+
+/* ---------- 打开 / 关闭 ---------- */
+function openShop() {
+  const mask = document.getElementById('shopMask');
+  if (!mask) return;
+
+  /* 小游戏浮层要是开着,先关掉 —— 两个浮层叠在一起会分不清谁是谁 */
+  const gm = document.getElementById('gameMask');
+  if (gm && gm.classList.contains('open')) closeGame();
+
+  /* 它正在嚼、或者两口之间歇着的时候,先别打断。
+     因为喂完会自动回主界面,这会儿它嘴边还叼着东西;
+     你要是立刻又点「喂食」想看第二份,这一 clearAction 会把好好的一顿掐断,
+     嘴一闭食物凭空消失,看着像 bug。等它吃完再进来,这份体贴也不吃亏。
+     ★ 歇口气那 4 秒 stageEl 上没有 'eating' 类,得捎上 eatResting 一起判 ——
+       不然歇着的时候开一下小卖部,排着的饭就被误清了 */
+  if (!stageEl.classList.contains('eating') && !eatResting) clearAction();
+
+  renderShop();
+  mask.classList.add('open');
+}
+
+function closeShop() {
+  const mask = document.getElementById('shopMask');
+  if (!mask) return;
+  mask.classList.remove('open');
+}
+
+/* ---------- 到点提醒吃药 ---------- */
+/* 想改提醒时间,就改下面这两个数字(24 小时制) */
+const REMIND = { morning: 8, evening: 20 };
+let remindedKey = '';     // 记一下这次提醒过没有,免得同一小时内反复刷屏
+
+function checkRemind() {
+  const now = new Date();
+  const h = now.getHours();
+  const key = todayStr() + '-' + h;
+  if (remindedKey === key) return;        // 这个小时已经提醒过了
+
+  const m = todayMed();
+  const name = PETS[currentPet].name;
+
+  if (h === REMIND.morning && !m.morning) {
+    remindedKey = key;
+    showMessage(name + ':早上好呀~ 该吸药啦,记得吸完漱口哦!');
+  } else if (h === REMIND.evening && !m.evening) {
+    remindedKey = key;
+    showMessage(name + ':晚上啦,今天的药别忘了哦~');
+  }
+}
+
+/* ---------- 清空存档(方便你反复测试) ---------- */
+function resetSave() {
+  if (!confirm('确定要清空存档吗?饱腹、心情、宠物选择和打卡记录都会回到初始状态。')) return;
+  try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
+  location.reload();
+}
+
+/* ---------- 「试着说」提示条 ----------
+   点一下 = 帮你把字填进输入框 + 自动按发送。
+   所以它走的是和手打完全相同的路 —— 这里没有第二套逻辑。
+   想加自己的提示词,改下面这个数组就行 */
+const CMD_HINTS = ['跑一跑', '跳一跳', '睡觉', '醒过来', '停下', '你好'];
+
+function buildCmdHints() {
+  document.getElementById('cmdHints').innerHTML =
+    '<span class="cmd-tip">试着说:</span>' +
+    CMD_HINTS.map(function (t) {
+      return '<button class="cmd-chip" onclick="quick(\'' + t + '\')">' + t + '</button>';
+    }).join('');
+}
+
+function quick(text) {
+  document.getElementById('input').value = text;
+  send();
+}
+
+/* ---- 启动 ---- */
+const canSave = storageOK();          // 先问一句:这浏览器让存档吗?
+/* ① 读存档(必须在画界面之前,不然会被默认值盖掉)。
+      全新用户没有存档,也要先把过去已经结束的时段标成「判过了」——
+      不然一进门就会被算成前几天都在漏打卡,心情直接归零 */
+if (!loadGame()) seedMissLog();
+const settled = settleStatus();       // ② 结算:该掉的饱腹/心情 + 有没有漏打卡
+/* 把结算后的值也存一次:不然你打开看一眼就走,
+   这段时间的消耗要等下次互动才落盘,刷新页面就白算了 */
+saveGame();
+
+buildPicker();                        // ③ 然后才画界面
+renderPet();
+renderHealth();
+buildCmdHints();                      // 「试着说」提示条
+document.getElementById('input').placeholder = '和' + PETS[currentPet].name + '说点什么…';
+
+showMessage(PETS[currentPet].name + ':' + pick(REPLIES[currentPet].greet));
+if (settled.away) showMessage('【离线提醒】' + settled.away);
+if (settled.missed > 0) {
+  showMessage('【提醒】有药没打卡,心情 -' + settled.missed
+              + '。药按时吃,它才有力气陪你玩~');
+}
+
+/* 每分钟自查一次:到点了打卡按钮会自己亮起来,该提醒的也会自己弹出来。
+   不做这一步的话,页面开着不动,过了 12 点按钮还一直灰着。 */
+setInterval(function () {
+  checkRemind();
+  renderHealth();
+}, 60000);
+
+if (!canSave) {
+  showMessage('【提示】这个浏览器不让本地存档,刷新后进度会重置。'
+            + '改用 Live Server 打开(http://127.0.0.1:5500)就能存住了。');
+}
+
+setInterval(checkRemind, 30000);      // ④ 每 30 秒看一眼,该不该提醒吃药
+checkRemind();
+
+
+/* ============================================================
+   第 9 步:小游戏「俄罗斯方块」
+   ------------------------------------------------------------
+   这段代码分成了清清楚楚的两层,这是本步最值得学的地方:
+
+     ① 纯逻辑层(tetro 开头的函数):只跟数组和数字打交道,从不碰画面。
+        好处是「改完规则不用真打开网页试」—— 写个测试脚本就能验证。
+     ② 画面层(game 开头的函数):读逻辑层算出来的结果,画到 canvas 上。
+
+   为什么不写成一大团? 因为方块游戏最会出错的地方是消行、旋转、
+   撞墙、出生位置——这些边界情况全藏在画面背后,肉眼根本看不出来。
+   把逻辑剥出来单独放,才能一条一条测。
+   ============================================================ */
+
+/* ---------- ① 纯逻辑层 ---------- */
+
+const TETRO_COLS = 10;   // 棋盘 10 列
+const TETRO_ROWS = 20;   // 20 行
+
+/* 7 种方块。1 = 有格子,0 = 空。
+   只写「一个朝向」就够——其余三个朝向靠旋转算出来 */
+const TETRO_SHAPES = {
+  I: { color: '#7EC8E3', m: [[1, 1, 1, 1]] },
+  J: { color: '#7B9FE0', m: [[1, 0, 0], [1, 1, 1]] },
+  L: { color: '#F0A868', m: [[0, 0, 1], [1, 1, 1]] },
+  O: { color: '#F5D76E', m: [[1, 1], [1, 1]] },
+  S: { color: '#8FD694', m: [[0, 1, 1], [1, 1, 0]] },
+  T: { color: '#C79BE0', m: [[0, 1, 0], [1, 1, 1]] },
+  Z: { color: '#F0908E', m: [[1, 1, 0], [0, 1, 1]] }
+};
+
+/* 空棋盘:20 行 × 10 列,每格先填空字符串(空字符串表示「没有方块」) */
+function tetroNewBoard() {
+  const b = [];
+  for (let r = 0; r < TETRO_ROWS; r++) {
+    b.push(new Array(TETRO_COLS).fill(''));
+  }
+  return b;
+}
+
+/* 顺时针转 90°:先转置(行列互换),再把每行左右翻个个儿。
+   ★ 一定要返回「新数组」而不是改原来的——原矩阵要留着当基准,
+     否则转四次就回不去了 */
+function tetroRotate(m) {
+  const rows = m.length, cols = m[0].length;
+  const out = [];
+  for (let r = 0; r < cols; r++) out.push(new Array(rows).fill(0));
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      out[c][rows - 1 - r] = m[r][c];
+    }
+  }
+  return out;
+}
+
+/* 撞了没有? 方块待在 (px,py) 这个位置合不合法。
+   三种情况算撞:探出左右墙、掉出底部、压到已有格子上。
+   ★ y < 0 不算撞:方块刚出生时会有一部分在屏幕上方,那是正常的 */
+function tetroCollide(board, m, px, py) {
+  for (let r = 0; r < m.length; r++) {
+    for (let c = 0; c < m[r].length; c++) {
+      if (!m[r][c]) continue;
+      const x = px + c, y = py + r;
+      if (x < 0 || x >= TETRO_COLS) return true;
+      if (y >= TETRO_ROWS) return true;
+      if (y >= 0 && board[y][x]) return true;
+    }
+  }
+  return false;
+}
+
+/* 把方块「烙」进棋盘,返回新棋盘(同样不改原来的) */
+function tetroMerge(board, m, px, py, color) {
+  const out = board.map(function (row) { return row.slice(); });
+  for (let r = 0; r < m.length; r++) {
+    for (let c = 0; c < m[r].length; c++) {
+      if (!m[r][c]) continue;
+      const x = px + c, y = py + r;
+      if (y >= 0 && y < TETRO_ROWS && x >= 0 && x < TETRO_COLS) out[y][x] = color;
+    }
+  }
+  return out;
+}
+
+/* 消行:整行填满就删掉,上面的整体下移,顶部补上空行。
+   返回 { board, lines },lines = 这次消掉几行(0 表示没消) */
+function tetroClearLines(board) {
+  const keep = board.filter(function (row) {
+    return row.some(function (cell) { return !cell; });   // 还有空格的留下
+  });
+  const lines = TETRO_ROWS - keep.length;
+  const fresh = [];
+  for (let i = 0; i < lines; i++) fresh.push(new Array(TETRO_COLS).fill(''));
+  return { board: fresh.concat(keep), lines: lines };
+}
+
+/* 一次消 1/2/3/4 行,分数差得很多——攒满一次消 4 行最划算。
+   再乘上等级,等级越高同样的行数给分越多 */
+function tetroScoreFor(lines, level) {
+  const table = { 1: 100, 2: 300, 3: 500, 4: 800 };
+  return (table[lines] || 0) * level;
+}
+
+/* 等级越高落得越快,但封底 90 毫秒,再快人就跟不上了 */
+function tetroDropMs(level) {
+  return Math.max(90, 800 - (level - 1) * 70);
+}
+
+/* 7 个一洗:「一袋」里 7 种方块各来一次,打乱顺序挨个发。
+   这样就不会出现「连着六个 S」那种让人骂人的运气 */
+function tetroBag() {
+  const keys = Object.keys(TETRO_SHAPES);
+  for (let i = keys.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const t = keys[i]; keys[i] = keys[j]; keys[j] = t;
+  }
+  return keys;
+}
+
+/* 造一个方块。m 要复制一份,不然旋转时会改到 TETRO_SHAPES 里的原始数据 */
+function tetroMakePiece(key) {
+  const s = TETRO_SHAPES[key];
+  return { key: key, color: s.color, m: s.m.map(function (row) { return row.slice(); }) };
+}
+
+/* 新方块出生在水平居中的位置 */
+function tetroSpawnX(piece) {
+  return Math.floor((TETRO_COLS - piece.m[0].length) / 2);
+}
+
+/* 玩得好,心情加得多。但封顶 25 ——
+   养成游戏最怕「一个漏洞就能刷满」,封顶就是那道保险 */
+function tetroReward(score, lines) {
+  const base    = score >= 200 ? 6 : (score >= 50 ? 4 : 2);
+  const byScore = Math.min(14, Math.floor(score / 150));   // 每 150 分 +1
+  const byLines = Math.min(6, lines);                      // 每消一行 +1
+  return Math.min(25, base + byScore + byLines);
+}
+
+/* ---------- ② 画面层 ---------- */
+
+const CELL = 24;   // 每格 24 像素 → 棋盘 240 × 480
+
+/* 游戏的全部状态都装在这一个对象里。集中放的好处:
+   想知道「游戏现在什么情况」,看这一处就够了 */
+const TETRO = {
+  board: [],
+  cur: null,        // 正在下落的方块
+  nextKey: null,    // 下一个方块的种类
+  bag: [],          // 还没发的方块口袋
+  x: 0, y: 0,       // 正在下落方块的位置(格子坐标,不是像素)
+  score: 0,
+  lines: 0,
+  level: 1,
+  running: false,   // 是否在玩
+  paused: false,
+  settled: false,   // 这一局是否已经结算过奖励(防止重复发奖)
+  acc: 0,           // 累计了多久没往下掉一格
+  last: 0,          // 上一帧的时间戳
+  raf: 0            // 动画帧的编号,退出时要拿它取消
+};
+
+function gameCanvas() { return document.getElementById('tetrisCanvas'); }
+
+/* 高清屏适配。手机的 devicePixelRatio 常常是 2 或 3,
+   如果画布只用 240×480 个真实像素,看起来就是糊的。
+   做法:把画布的真实像素放大 dpr 倍,CSS 尺寸不变,再让绘图坐标整体缩放。 */
+function setupCanvas() {
+  const cv = gameCanvas();
+  if (!cv) return;
+  const dpr = (window && window.devicePixelRatio) || 1;
+  cv.width  = TETRO_COLS * CELL * dpr;
+  cv.height = TETRO_ROWS * CELL * dpr;
+  cv.style.width  = (TETRO_COLS * CELL) + 'px';
+  cv.style.height = (TETRO_ROWS * CELL) + 'px';
+  const ctx = cv.getContext('2d');
+  if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+/* 画一个格子:底色 + 左上角一道白色高光,看起来有点厚度 */
+function drawCell(ctx, c, r, color) {
+  const x = c * CELL, y = r * CELL;
+  ctx.fillStyle = color;
+  ctx.fillRect(x + 1, y + 1, CELL - 2, CELL - 2);
+  ctx.fillStyle = 'rgba(255,255,255,0.45)';
+  ctx.fillRect(x + 4, y + 4, CELL - 10, 3);
+  ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + 1.5, y + 1.5, CELL - 3, CELL - 3);
+}
+
+/* 重画整个画面。顺序:背景 → 网格 → 已落定的格子 → 正在下落的那块 */
+function gameDraw() {
+  const cv = gameCanvas();
+  if (!cv) return;
+  const ctx = cv.getContext('2d');
+  if (!ctx) return;                    // 有些环境拿不到 2d 上下文,直接不画
+
+  const W = TETRO_COLS * CELL, H = TETRO_ROWS * CELL;
+
+  ctx.fillStyle = '#FFFBF2';
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.strokeStyle = '#F5EBDA';
+  ctx.lineWidth = 1;
+  for (let c = 1; c < TETRO_COLS; c++) {
+    ctx.beginPath(); ctx.moveTo(c * CELL + 0.5, 0); ctx.lineTo(c * CELL + 0.5, H); ctx.stroke();
+  }
+  for (let r = 1; r < TETRO_ROWS; r++) {
+    ctx.beginPath(); ctx.moveTo(0, r * CELL + 0.5); ctx.lineTo(W, r * CELL + 0.5); ctx.stroke();
+  }
+
+  for (let r = 0; r < TETRO_ROWS; r++) {
+    for (let c = 0; c < TETRO_COLS; c++) {
+      if (TETRO.board[r][c]) drawCell(ctx, c, r, TETRO.board[r][c]);
+    }
+  }
+
+  if (TETRO.cur && TETRO.running) {
+    const m = TETRO.cur.m;
+    for (let r = 0; r < m.length; r++) {
+      for (let c = 0; c < m[r].length; c++) {
+        if (m[r][c] && TETRO.y + r >= 0) {
+          drawCell(ctx, TETRO.x + c, TETRO.y + r, TETRO.cur.color);
+        }
+      }
+    }
+  }
+}
+
+function gameHud() {
+  document.getElementById('hudScore').innerText = TETRO.score;
+  document.getElementById('hudLines').innerText = TETRO.lines;
+  document.getElementById('hudLevel').innerText = TETRO.level;
+}
+
+/* 从口袋里拿一个方块。口袋空了就洗新的一袋 */
+function gameNextKey() {
+  if (!TETRO.bag.length) TETRO.bag = tetroBag();
+  return TETRO.bag.shift();
+}
+
+/* 出一个新方块。如果一出生就撞上,说明堆到顶了 → 游戏结束 */
+function gameSpawn() {
+  const piece = tetroMakePiece(TETRO.nextKey || gameNextKey());
+  TETRO.nextKey = gameNextKey();
+  TETRO.cur = piece;
+  TETRO.x = tetroSpawnX(piece);
+  TETRO.y = 0;
+  if (tetroCollide(TETRO.board, piece.m, TETRO.x, TETRO.y)) {
+    TETRO.cur = null;
+    gameEnd();
+    return false;
+  }
+  return true;
+}
+
+/* 往下掉一格。掉不动了就「落定」 */
+function gameStep() {
+  if (!TETRO.running || TETRO.paused || !TETRO.cur) return;
+  if (!tetroCollide(TETRO.board, TETRO.cur.m, TETRO.x, TETRO.y + 1)) {
+    TETRO.y++;
+  } else {
+    gameLock();
+  }
+  gameDraw();
+}
+
+/* 落定:烙进棋盘 → 检查消行 → 出下一个方块 */
+function gameLock() {
+  if (!TETRO.cur) return;
+  TETRO.board = tetroMerge(TETRO.board, TETRO.cur.m, TETRO.x, TETRO.y, TETRO.cur.color);
+  const res = tetroClearLines(TETRO.board);
+  TETRO.board = res.board;
+  if (res.lines) {
+    TETRO.lines += res.lines;
+    TETRO.score += tetroScoreFor(res.lines, TETRO.level);
+    TETRO.level = Math.floor(TETRO.lines / 10) + 1;   // 每消 10 行升一级
+    gameHud();
+  }
+  gameSpawn();
+}
+
+/* 主循环:每帧问一句「距上次下落够久了没」。
+   用时间累加而不是 setInterval,是因为等级一变速度,
+   setInterval 还得重启,用累加就只要换个阈值 */
+function gameLoop(ts) {
+  if (!TETRO.running) { TETRO.raf = 0; return; }
+  if (!TETRO.last) TETRO.last = ts;
+  const dt = ts - TETRO.last;
+  TETRO.last = ts;
+
+  if (!TETRO.paused) {
+    TETRO.acc += dt;
+    const step = tetroDropMs(TETRO.level);
+    while (TETRO.acc >= step) {
+      TETRO.acc -= step;
+      gameStep();
+      if (!TETRO.running) break;        // 可能刚好这一步就堆到顶了
+    }
+  }
+  TETRO.raf = requestAnimationFrame(gameLoop);
+}
+
+/* 能不能操作? 没在玩、暂停中、或没有方块,都不理 */
+function gameAlive() {
+  return TETRO.running && !TETRO.paused && !!TETRO.cur;
+}
+
+function gameMove(dx) {
+  if (!gameAlive()) return;
+  if (!tetroCollide(TETRO.board, TETRO.cur.m, TETRO.x + dx, TETRO.y)) {
+    TETRO.x += dx;
+    gameDraw();
+  }
+}
+
+/* 旋转。贴墙或贴着别的方块转不动时,试着左右挪一两格再转
+   —— 这叫「踢墙」,没有它靠边的地方手感会很别扭 */
+function gameRotate() {
+  if (!gameAlive()) return;
+  const rotated = tetroRotate(TETRO.cur.m);
+  const kicks = [0, -1, 1, -2, 2];
+  for (let i = 0; i < kicks.length; i++) {
+    if (!tetroCollide(TETRO.board, rotated, TETRO.x + kicks[i], TETRO.y)) {
+      TETRO.cur.m = rotated;
+      TETRO.x += kicks[i];
+      gameDraw();
+      return;
+    }
+  }
+}
+
+/* 往下压一格(软降),给 1 分辛苦费 */
+function gameSoftDrop() {
+  if (!gameAlive()) return;
+  if (!tetroCollide(TETRO.board, TETRO.cur.m, TETRO.x, TETRO.y + 1)) {
+    TETRO.y++;
+    TETRO.score += 1;
+    gameHud();
+  } else {
+    gameLock();
+  }
+  gameDraw();
+}
+
+/* 一口气落到底,每格给 2 分 */
+function gameHardDrop() {
+  if (!gameAlive()) return;
+  let cells = 0;
+  while (!tetroCollide(TETRO.board, TETRO.cur.m, TETRO.x, TETRO.y + 1)) {
+    TETRO.y++; cells++;
+  }
+  TETRO.score += cells * 2;
+  gameLock();
+  gameHud();
+  gameDraw();
+}
+
+function gameTogglePause() {
+  if (!TETRO.running) return;
+  TETRO.paused = !TETRO.paused;
+
+  const btn = document.getElementById('padPause');
+  if (btn) {
+    btn.innerText = TETRO.paused ? '继续' : '暂停';
+    if (TETRO.paused) btn.classList.add('pause-on');
+    else              btn.classList.remove('pause-on');
+  }
+
+  gameDraw();
+  if (TETRO.paused) {
+    const cv = gameCanvas();
+    const ctx = cv ? cv.getContext('2d') : null;
+    if (ctx) {
+      ctx.fillStyle = 'rgba(255,251,242,0.84)';
+      ctx.fillRect(0, 0, TETRO_COLS * CELL, TETRO_ROWS * CELL);
+      ctx.fillStyle = '#B08968';
+      ctx.font = '15px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('已暂停,按 P 或点「继续」', TETRO_COLS * CELL / 2, TETRO_ROWS * CELL / 2);
+    }
+  }
+}
+
+function gameStart() {
+  TETRO.board   = tetroNewBoard();
+  TETRO.bag     = [];
+  TETRO.score   = 0;
+  TETRO.lines   = 0;
+  TETRO.level   = 1;
+  TETRO.paused  = false;
+  TETRO.settled = false;
+  TETRO.acc     = 0;
+  TETRO.last    = 0;
+  TETRO.running = true;
+
+  TETRO.nextKey = gameNextKey();
+  gameSpawn();
+
+  const btn = document.getElementById('padPause');
+  if (btn) { btn.innerText = '暂停'; btn.classList.remove('pause-on'); }
+
+  gameHud();
+  gameDraw();
+  if (!TETRO.raf) TETRO.raf = requestAnimationFrame(gameLoop);
+}
+
+function gameEnd() {
+  TETRO.running = false;
+  TETRO.cur = null;
+  if (TETRO.raf) { cancelAnimationFrame(TETRO.raf); TETRO.raf = 0; }
+  gameDraw();
+  gameSettle();
+}
+
+/* 结算:把分数换成宠物心情。这是「玩游戏」和「养宠物」之间接上的那一根线 */
+function gameSettle() {
+  if (TETRO.settled) return;            // 一局只发一次奖,防止重复结算把心情刷上去
+  const name = PETS[currentPet].name;
+  const add  = tetroReward(TETRO.score, TETRO.lines);
+  const gotC = gameCoinGain(TETRO.score);   // 分数换爱心币(单局、每天各有上限)
+
+  happy  = Math.min(100, happy  + add);
+  hunger = Math.max(0,   hunger - GAME_HUNGER_COST);   // 打一局费 30 饱腹 —— 动脑子最费的其实是体力
+  earnCoins(gotC);
+  updateUI();                              // updateUI 里带存档,所以会自动记住
+  TETRO.settled = true;
+
+  document.getElementById('goScore').innerText  = TETRO.score;
+  document.getElementById('goLine').innerText   = '消了 ' + TETRO.lines + ' 行 · 等级 ' + TETRO.level;
+  document.getElementById('goReward').innerText = name + '心情 +' + add + ' · 爱心币 +' + gotC
+    + ' · 饱腹 -' + GAME_HUNGER_COST
+    + (add >= 20 ? ' · 太厉害了!' : add >= 12 ? ' · 玩得不错~' : '');
+
+  let say;
+  if (TETRO.score >= 800)      say = '哇!你太厉害了,我在旁边都看呆了~';
+  else if (TETRO.score >= 200) say = '好棒!再来一局嘛~';
+  else if (TETRO.lines > 0)    say = '消掉' + TETRO.lines + '行了,继续加油!';
+  else                         say = '没关系,多练几次就熟啦~';
+  showMessage(name + ':' + say);
+
+  document.getElementById('gameOver').classList.add('open');
+}
+
+/* ---- 打开 / 关闭 ---- */
+
+function openGame() {
+  const mask = document.getElementById('gameMask');
+  if (!mask) return;
+
+  /* ★ 开局先结账 + 看嗉子够不够(一局要吃掉 30)。
+     不够就干脆别把浮层打开 —— 它会在主界面当场说一声,
+     比「进去了才被赶出来」明白得多 */
+  if (!enoughHungerToPlay()) return;
+
+  /* 小卖部要是开着,先关掉 —— 两个浮层叠在一起会分不清谁是谁 */
+  const sm = document.getElementById('shopMask');
+  if (sm && sm.classList.contains('open')) closeShop();
+
+  clearAction();                    // 先把正在跑/跳/睡的动画停掉,别在背后空转
+  document.getElementById('gameTitle').innerText =
+    '陪' + PETS[currentPet].name + '玩 · 俄罗斯方块';
+  document.getElementById('gameOver').classList.remove('open');
+  mask.classList.add('open');
+  setupCanvas();                    // 浮层显示出来之后再量尺寸
+  gameStart();
+  showMessage(PETS[currentPet].name + ':一起来玩俄罗斯方块吧!');
+}
+
+function closeGame() {
+  TETRO.running = false;
+  if (TETRO.raf) { cancelAnimationFrame(TETRO.raf); TETRO.raf = 0; }
+  document.getElementById('gameMask').classList.remove('open');
+  document.getElementById('gameOver').classList.remove('open');
+  if (TETRO.settled) happyReaction();   // 刚玩完,让它高兴一下
+}
+
+function gameRestart() {
+  /* 连打第二局照样要结账、照样看嗉子 —— 上一局刚扣掉 30,很可能已经不够了。
+     这时候游戏浮层还开着,气泡会被它盖住,所以话要说在结算面板上 */
+  if (!enoughHungerToPlay(document.getElementById('goReward'))) return;
+  document.getElementById('gameOver').classList.remove('open');
+  gameStart();
+}
+
+/* 不想打方块、只想快陪它一下 —— 就是原来那个「玩耍」 */
+function quickPlay() {
+  closeGame();
+  play();
+}
+
+/* 键盘。不开游戏时这个函数第一时间就退出了,所以不会影响打字
+   —— ★ 「按空格会让整个页面往下滚」,所以识别到按键后要 preventDefault */
+function gameKey(e) {
+  if (!TETRO.running) return;
+  const k = e.key;
+  if      (k === 'ArrowLeft')       gameMove(-1);
+  else if (k === 'ArrowRight')      gameMove(1);
+  else if (k === 'ArrowUp')         gameRotate();
+  else if (k === 'ArrowDown')       gameSoftDrop();
+  else if (k === ' ')               gameHardDrop();
+  else if (k === 'p' || k === 'P')  gameTogglePause();
+  else if (k === 'Escape')          { closeGame(); return; }
+  else return;
+  e.preventDefault();
+}
+
+document.addEventListener('keydown', gameKey);
+
+setupCanvas();   // 页面一打开就把画布按屏幕密度设好
+</script>
+</body>
+</html>
