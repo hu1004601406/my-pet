@@ -916,6 +916,32 @@
     align-items: center;
   }
 
+
+  /* ---------- 宠物消消乐 ---------- */
+  .score-rank { width:100%; margin:10px 0 4px; padding:9px 11px; border:1px solid #EDE1D2; border-radius:10px; background:#FFFCF7; color:#6D5848; font-size:12px; }
+  .score-rank-title { margin-bottom:5px; font-weight:700; }
+  .score-rank ol { margin:0; padding-left:22px; display:grid; grid-template-columns:1fr 1fr; gap:3px 12px; }
+  .score-rank li { display:flex; justify-content:space-between; gap:6px; }
+  .farm-round { width:100%; display:flex; align-items:center; justify-content:space-between; gap:8px; margin:7px 0; }
+  .farm-round-score { color:#6D5848; font-size:13px; font-weight:700; }
+  .farm-round button { border:1px solid #FFCC80; border-radius:9px; padding:8px 10px; background:#fff; color:#6D4C41; font:inherit; font-size:12px; cursor:pointer; }
+  .farm-round-status { width:100%; min-height:20px; color:#846A55; text-align:center; font-size:12px; }
+  .match-hud { display:flex; width:100%; gap:8px; margin:4px 0 9px; }
+  .match-board { width:min(100%, 350px); aspect-ratio:1; display:grid; grid-template-columns:repeat(7,1fr); gap:4px; padding:6px; border-radius:14px; background:#F3E5D3; touch-action:manipulation; }
+  .match-tile { min-width:0; min-height:0; display:grid; place-items:center; padding:0; border:1px solid #E8D9C8; border-radius:9px; background:#FFFCF7; cursor:pointer; transition:transform .12s, background .12s, border-color .12s; }
+  .match-tile:active { transform:scale(.92); }
+  .match-tile.selected { border:2px solid #F28C52; background:#FFF0DC; transform:scale(.94); }
+  .match-tile.matched { animation:matchPop .2s ease-in forwards; }
+  .match-tile svg { display:block; width:90%; height:90%; overflow:visible; }
+  .match-tile svg .pet-svg { width:100%; height:100%; animation:none; }
+  .match-tile svg, .match-tile svg * { animation:none !important; }
+  .match-status { min-height:22px; margin:4px 0 8px; color:#846A55; font-size:13px; text-align:center; }
+  .match-actions { display:flex; justify-content:center; gap:8px; width:100%; }
+  .match-actions button { padding:9px 15px; border:1px solid #FFCC80; border-radius:10px; background:#fff; color:#6D4C41; font:inherit; cursor:pointer; }
+  .match-actions button.primary { background:#FF9800; color:#fff; border-color:#FF9800; }
+  .match-actions button:disabled { opacity:.5; cursor:default; }
+  @keyframes matchPop { to { opacity:0; transform:scale(.35) rotate(12deg); } }
+  @media (max-width:380px) { .match-board { gap:3px; padding:4px; } .match-tile { border-radius:7px; } }
   /* ---------- 种田面板 ----------
      4×4 的小菜地,16 格。空格虚线提示可点,已种实线、成熟金边 */
   .farm-grid {
@@ -1193,11 +1219,46 @@
   .bag-feed:hover  { background: #F57C00; }
   .bag-feed:active { transform: scale(0.95); }
   .bag-empty { font-size: 12px; color: #C0A48C; padding: 4px 2px; }
-</style>
-</head>
-<body>
 
-  <div class="pet-card">
+  /* ---------- 开场封面 ---------- */
+  .pet-card.app-hidden { display: none; }
+  .welcome-screen {
+    width: min(92vw, 420px); padding: 30px 24px 26px; text-align: center;
+    background: linear-gradient(180deg, #FFFFFF 0%, #FFFDF8 42%, #FFF6E9 100%);
+    border-radius: 28px; box-shadow: 0 14px 36px rgba(255, 152, 0, .18);
+    animation: welcomeIn .45s ease-out;
+  }
+  .welcome-screen.is-hidden { display: none; }
+  .welcome-hero { font-size: 68px; line-height: 1; margin: 5px 0 12px; }
+  .welcome-screen h1 { margin: 0; color: #6D4C41; font-size: 28px; }
+  .welcome-screen p { margin: 8px 0 20px; color: #9A806D; }
+  .welcome-label { display: block; text-align: left; margin: 14px 0 7px; color: #6D4C41; font-size: 14px; font-weight: 700; }
+  .welcome-pets { display: flex; gap: 9px; }
+  .welcome-pet { flex: 1; border: 2px solid transparent; border-radius: 14px; padding: 10px 4px; background: #FFF3E0; color: #6D4C41; cursor: pointer; font: inherit; }
+  .reset-welcome { float: right; border: 0; border-radius: 10px; padding: 6px 10px; background: #FFF3E0; color: #A66A32; font-family: inherit; font-size: 13px; cursor: pointer; }
+  .reset-welcome:hover { background: #FFE0B2; }  .welcome-pet.selected { border-color: #FF9800; background: #FFE0B2; font-weight: 700; }
+  .welcome-pet-icon { display: block; font-size: 28px; margin-bottom: 3px; }
+  .welcome-name { width: 100%; border: 2px solid #F1D5B7; border-radius: 13px; padding: 12px 13px; font: inherit; color: #5D4037; outline: none; background: #FFFDFC; }
+  .welcome-name:focus { border-color: #FF9800; box-shadow: 0 0 0 3px rgba(255,152,0,.12); }
+  .welcome-start { width: 100%; border: 0; border-radius: 14px; padding: 13px; margin-top: 20px; background: #FF9800; color: #fff; font-family: inherit; font-size: 16px; font-weight: 700; cursor: pointer; box-shadow: 0 6px 12px rgba(255,152,0,.22); }
+  .welcome-start:hover { background: #F57C00; }
+  @keyframes welcomeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }</style>
+</head>
+<body>  <section class="welcome-screen" id="welcomeScreen">
+    <div class="welcome-hero" id="welcomeHero" aria-hidden="true"></div>
+    <h1>欢迎来到我的宠物屋</h1>
+    <p>先选一位小伙伴，再给它取个名字吧</p>
+    <label class="welcome-label">选择宠物</label>
+    <div class="welcome-pets" id="welcomePets"></div>
+    <label class="welcome-label" for="welcomeName">宠物名字</label>
+    <input class="welcome-name" id="welcomeName" maxlength="12" placeholder="例如：雪球" autocomplete="off">
+    <button class="welcome-start" id="welcomeStart">开始陪伴</button>
+  </section>
+
+
+  <div class="pet-card" id="petCard">
+
+    <button type="button" class="reset-welcome" onclick="resetWelcome()">重新选择</button>
 
     <!-- 宠物选择条:由 JS 自动生成 -->
     <div class="pet-picker" id="picker"></div>
@@ -1346,14 +1407,16 @@
       </div>
 
       <!-- ============ 玩法切换 tab ============
-           一个浮层里塞两种玩法 —— 想玩哪个点哪个,两边状态都留着,
+           一个浮层里塞三种玩法 —— 想玩哪个点哪个,各玩法状态分别保留,
            关掉玩耍界面再回来,上回玩哪种就进哪种(见 lastGameTab)。 -->
       <div class="game-tabs">
         <button class="g-tab on" id="tabTetris" onclick="switchGame('tetris')">打方块</button>
         <button class="g-tab"    id="tabFarm"   onclick="switchGame('farm')">种田</button>
+        <button class="g-tab" id="tabMatch" onclick="switchGame('match')">消消乐</button>
       </div>
 
       <div class="game-panel" id="panelTetris">
+        <div class="score-rank" id="rankingTetris"></div>
 
       <div class="game-hud">
         <div class="hud-item"><div class="hud-k">分数</div><div class="hud-v" id="hudScore">0</div></div>
@@ -1395,13 +1458,15 @@
       <div class="game-panel" id="panelFarm" style="display:none">
 
         <div class="farm-tip">点空格选种子,生长中点击浇水,浇够次数后收获</div>
+        <div class="farm-round"><span class="farm-round-score">本轮积分 <b id="farmScore">0</b></span><button onclick="farmFinishRound()">结束本轮并排名</button></div><div class="farm-round-status" id="farmRoundStatus"></div>
+        <div class="score-rank" id="rankingFarm"></div>
 
         <!-- 4×4 菜地,16 格 JS 渲染 -->
         <div class="farm-grid" id="farmGrid"></div>
 
         <div class="game-tip">
-          每次浇水消耗 1 点爱心值,达到作物所需次数并成熟后才能收获<br>
-          收一种心情也加,饱腹不足 30 不能玩,先喂它一点
+          收获会累积作物产出积分；结束本轮可查看本机排名<br>
+          浇水消耗爱心值,饱腹不足 30 不能玩,先喂它一点
         </div>
 
         <!-- 种子选择器:点空格时浮出,选完就收回 -->
@@ -1411,6 +1476,21 @@
         </div>
       </div>
 
+
+      <div class="game-panel" id="panelMatch" style="display:none">
+        <div class="match-hud">
+          <div class="hud-item"><div class="hud-k">分数</div><div class="hud-v" id="matchScore">0</div></div>
+          <div class="hud-item"><div class="hud-k">剩余步数</div><div class="hud-v" id="matchMoves">24</div></div>
+          <div class="hud-item"><div class="hud-k">最佳连消</div><div class="hud-v" id="matchCombo">0</div></div>
+        </div>
+        <div class="match-board" id="matchBoard" aria-label="宠物消消乐棋盘"></div>
+        <div class="score-rank" id="rankingMatch"></div>
+        <div class="match-status" id="matchStatus" aria-live="polite">交换相邻图案，连成三个或更多即可消除</div>
+        <div class="match-actions">
+          <button class="primary" id="matchRestart" onclick="matchStart()">重新开始</button>
+        </div>
+        <div class="game-tip">每局 24 步 · 消除越多得分越高<br>完成一局饱腹 -30，奖励心情和爱心币</div>
+      </div>
       <!-- 一局结束才显示。里面四个数字全是 JS 填的 -->
       <div class="game-over" id="gameOver">
         <div class="go-title" id="goTitle">这局结束啦</div>
@@ -1822,6 +1902,7 @@ const RULES = [
    状态与逻辑
    ============================================================ */
 let currentPet = 'cat';   // 当前选中的宠物
+let petNickname = '';      // 用户给宠物取的名字
 let hunger = 80;          // 饱腹度 0-100
 let happy  = 80;          // 心情度 0-100
 
@@ -1839,6 +1920,7 @@ let gameCoin = { date: '', got: 0 };   // 今天玩游戏已经赚了多少币,�
    时间按绝对时间戳算,所以关页面再回来照样长,测试也能拨 now 调时间 */
 const FARM_ROWS = 4, FARM_COLS = 4, FARM_TOTAL = FARM_ROWS * FARM_COLS;
 let farmCells    = new Array(FARM_TOTAL).fill('');   // 16 格,默认全空
+let farmScore    = 0;   // 当前种田轮次积分
 let farmTickId   = 0;                                // 种田面板里的 setInterval id
 let lastGameTab  = 'tetris';                         // 上次玩的是哪种,下次默认进去
 
@@ -1885,10 +1967,8 @@ function pick(arr) {
 
 /* 生成顶部的宠物选择按钮 */
 function buildPicker() {
-  pickerEl.innerHTML = Object.keys(PETS).map(function (key) {
-    const active = key === currentPet ? ' active' : '';
-    return '<button class="pet-chip' + active + '" onclick="switchPet(\'' + key + '\')">'
-           + PETS[key].name + '</button>';
+  pickerEl.innerHTML = [currentPet].map(function (key) {
+    return '<button class="pet-chip active">' + PETS[key].name + '</button>';
   }).join('');
 }
 
@@ -1917,6 +1997,12 @@ function renderPet() {
 }
 
 /* 切换宠物 */
+/* 回到封面重新选择宠物和名字，同时清除当前存档 */
+function resetWelcome() {
+  if (!window.confirm('要回到封面重新选择宠物和名字吗？当前进度会重置。')) return;
+  try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
+  location.reload();
+}
 function switchPet(key) {
   currentPet = key;
   clearAction();          // 换宠物时,把正在跑/跳/睡的动画停掉
@@ -2463,7 +2549,44 @@ stageEl.addEventListener('click', function () {
    所以对象要先 JSON.stringify 转成文字存进去,读的时候再 JSON.parse 转回来。
    ============================================================ */
 const SAVE_KEY = 'myPetSave_v1';
+const SCORE_KEY = 'myPetScores_v1';
+let scoreBoard = { tetris: [], match: [], farm: [] };
 
+function loadScoreBoard() {
+  try {
+    const data = JSON.parse(localStorage.getItem(SCORE_KEY) || '{}');
+    ['tetris', 'match', 'farm'].forEach(function (game) {
+      scoreBoard[game] = Array.isArray(data[game]) ? data[game].filter(function (item) {
+        return item && Number.isFinite(item.score) && Number.isFinite(item.time);
+      }).sort(function (a, b) { return b.score - a.score || a.time - b.time; }).slice(0, 1000) : [];
+    });
+  } catch (e) { scoreBoard = { tetris: [], match: [], farm: [] }; }
+}
+function renderScoreRank(game, id, label) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const rows = scoreBoard[game].slice(0, 5);
+  el.innerHTML = '<div class="score-rank-title">' + label + ' · 本机历史前五</div>'
+    + (rows.length ? '<ol>' + rows.map(function (item) {
+      return '<li><span>' + new Date(item.time).toLocaleDateString() + '</span><b>' + item.score + '</b></li>';
+    }).join('') + '</ol>' : '<div>完成一局后会记录成绩</div>');
+}
+function renderAllScoreRanks() {
+  renderScoreRank('tetris', 'rankingTetris', '俄罗斯方块排名');
+  renderScoreRank('farm', 'rankingFarm', '种田排名');
+  renderScoreRank('match', 'rankingMatch', '消消乐排名');
+}
+function recordGameScore(game, score) {
+  const value = Math.max(0, Math.floor(score));
+  const entries = scoreBoard[game].slice();
+  const rank = entries.filter(function (item) { return item.score > value; }).length + 1;
+  entries.push({ score: value, time: Date.now() });
+  entries.sort(function (a, b) { return b.score - a.score || a.time - b.time; });
+  scoreBoard[game] = entries.slice(0, 1000);
+  try { localStorage.setItem(SCORE_KEY, JSON.stringify(scoreBoard)); } catch (e) {}
+  renderAllScoreRanks();
+  return rank;
+}
 /* 把 7 变成 '07',让日期格式统一成 2026-09-16 这种样子 */
 function pad2(n) {
   return n < 10 ? '0' + n : '' + n;
@@ -2497,6 +2620,7 @@ function loadGame() {
   if (!data) return false;
 
   if (PETS[data.pet]) currentPet = data.pet;
+  if (typeof data.petNickname === 'string') petNickname = data.petNickname;
   if (typeof data.hunger === 'number') hunger = data.hunger;
   if (typeof data.happy  === 'number') happy  = data.happy;
   medLog   = data.medLog   || {};
@@ -2524,7 +2648,8 @@ function loadGame() {
     farmCells = new Array(FARM_TOTAL).fill('');
   }
   /* 「上次玩的是哪种玩法」 — 缺失或坏值都默认方块 */
-  lastGameTab = (data.lastGameTab === 'farm') ? 'farm' : 'tetris';
+  farmScore = Number.isFinite(data.farmScore) ? Math.max(0, data.farmScore) : 0;
+  lastGameTab = ['farm', 'match'].includes(data.lastGameTab) ? data.lastGameTab : 'tetris';
 
   /* 「漏打卡扣心情」是这次新加的规则,老存档里没有这本账。
      这时候不能从零开始查 —— 那样会把之前好几天全算成漏打卡,一进门心情就归零。
@@ -2547,6 +2672,7 @@ function saveGame() {
      结果是「页面一直开着,宠物就永远不饿」,新规则会全被吃掉。 */
   const data = {
     pet: currentPet,
+    petNickname: petNickname,
     hunger: hunger,
     happy: happy,
     medLog: medLog,
@@ -2559,7 +2685,8 @@ function saveGame() {
     gameCoin: gameCoin,
     missLog: missLog,
     eatStreak: eatStreak,
-    farm: farmCells,           // 16 格菜地(空或 {crop, plantedAt}),换设备也能继续长
+    farm: farmCells,
+    farmScore: farmScore,           // 16 格菜地(空或 {crop, plantedAt}),换设备也能继续长
     lastGameTab: lastGameTab   // 下次进玩耍界面默认的 tab
   };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) {}
@@ -3570,11 +3697,53 @@ const canSave = storageOK();          // 先问一句:这浏览器让存档吗?
       全新用户没有存档,也要先把过去已经结束的时段标成「判过了」——
       不然一进门就会被算成前几天都在漏打卡,心情直接归零 */
 if (!loadGame()) seedMissLog();
+loadScoreBoard();
 const settled = settleStatus();       // ② 结算:该掉的饱腹/心情 + 有没有漏打卡
 /* 把结算后的值也存一次:不然你打开看一眼就走,
    这段时间的消耗要等下次互动才落盘,刷新页面就白算了 */
 saveGame();
 
+/* 开场封面：新用户先完成选宠物和命名；已有存档直接进入主界面 */
+function setupWelcome() {
+  const screen = document.getElementById('welcomeScreen');
+  const card = document.getElementById('petCard');
+  const pets = document.getElementById('welcomePets');
+  const hero = document.getElementById('welcomeHero');
+  const nameInput = document.getElementById('welcomeName');
+  const start = document.getElementById('welcomeStart');
+  const keys = Object.keys(PETS);
+  const icons = { cat: '🐱', dog: '🐶', rabbit: '🐰' };
+  const catHead = '<svg viewBox="0 0 180 150" width="112" height="94" aria-label="白色猫咪"><path d="M38 62 L32 20 L65 39 Q90 28 115 39 L148 20 L142 62 Q155 78 151 101 Q145 137 90 140 Q35 137 29 101 Q25 78 38 62Z" fill="#fff" stroke="#d8d8d8" stroke-width="4"/><path d="M38 62 L32 20 L65 39 M142 62 L148 20 L115 39" fill="#ffd4df" stroke="#e88ba0" stroke-width="3"/><ellipse cx="63" cy="78" rx="9" ry="13" fill="#75bde8"/><ellipse cx="117" cy="78" rx="9" ry="13" fill="#75bde8"/><ellipse cx="63" cy="80" rx="3" ry="7" fill="#355c78"/><ellipse cx="117" cy="80" rx="3" ry="7" fill="#355c78"/><path d="M82 101 Q90 95 98 101 Q90 111 82 101Z" fill="#ef91a6"/><path d="M90 108 Q83 119 73 115 M90 108 Q97 119 107 115" fill="none" stroke="#7d625a" stroke-width="3" stroke-linecap="round"/></svg>';
+  let selected = currentPet;
+  pets.innerHTML = keys.map(function (key) {
+    return '<button type="button" class="welcome-pet' + (key === selected ? ' selected' : '') + '" data-pet="' + key + '"><span class="welcome-pet-icon">' + (icons[key] || '🐾') + '</span>' + PETS[key].name + '</button>';
+  }).join('');
+  function refreshChoice() {
+    pets.querySelectorAll('.welcome-pet').forEach(function (button) { button.classList.toggle('selected', button.dataset.pet === selected); });
+    hero.innerHTML = selected === 'cat' ? catHead : (icons[selected] || '🐾');
+  }
+  pets.addEventListener('click', function (event) { const button = event.target.closest('.welcome-pet'); if (!button) return; selected = button.dataset.pet; refreshChoice(); });
+  refreshChoice();
+  if (petNickname) nameInput.value = petNickname;
+  start.onclick = function () {
+    const typed = nameInput.value.trim();
+    if (!typed) { nameInput.focus(); nameInput.placeholder = '请先给宠物取个名字'; return; }
+    currentPet = selected;
+    petNickname = typed;
+    PETS[currentPet].name = petNickname;
+    saveGame();
+    screen.classList.add('is-hidden');
+    card.classList.remove('app-hidden');
+    buildPicker(); renderPet();
+    document.getElementById('input').placeholder = '和' + PETS[currentPet].name + '说点什么…';
+    showMessage(PETS[currentPet].name + ':' + pick(REPLIES[currentPet].greet));
+  };
+  if (petNickname) { PETS[currentPet].name = petNickname; screen.classList.add('is-hidden'); card.classList.remove('app-hidden'); }
+  else { card.classList.add('app-hidden'); }
+}
+setupWelcome();
+
+  renderAllScoreRanks();
 buildPicker();                        // ③ 然后才画界面
 renderPet();
 renderHealth();
@@ -4026,6 +4195,7 @@ function gameSettle() {
   const name = PETS[currentPet].name;
   const add  = tetroReward(TETRO.score, TETRO.lines);
   const gotC = gameCoinGain(TETRO.score);   // 分数换爱心币(单局、每天各有上限)
+  const rank = recordGameScore('tetris', TETRO.score);
 
   happy  = Math.min(100, happy  + add);
   hunger = Math.max(0,   hunger - GAME_HUNGER_COST);   // 打一局费 30 饱腹 —— 动脑子最费的其实是体力
@@ -4037,6 +4207,7 @@ function gameSettle() {
   document.getElementById('goLine').innerText   = '消了 ' + TETRO.lines + ' 行 · 等级 ' + TETRO.level;
   document.getElementById('goReward').innerText = name + '心情 +' + add + ' · 爱心币 +' + gotC
     + ' · 饱腹 -' + GAME_HUNGER_COST
+    + ' · 本机历史第 ' + rank + ' 名'
     + (add >= 20 ? ' · 太厉害了!' : add >= 12 ? ' · 玩得不错~' : '');
 
   let say;
@@ -4079,6 +4250,9 @@ function openGame() {
     farmStart(Date.now());
     switchGame('farm');
     showMessage(PETS[currentPet].name + ':一起来种田吧!');
+  } else if (lastGameTab === 'match') {
+    switchGame('match');
+    showMessage(PETS[currentPet].name + ':来玩消消乐吧!');
   } else {
     TETRO._wasRunning = false;
     gameStart();
@@ -4247,6 +4421,7 @@ function harvest(idx, nowMs) {
   const crop = findCrop(cell.crop);
   const name = PETS[currentPet].name;
   const got  = farmAddCoin(crop.harvest);
+  farmScore += crop.harvest;
   const foodId = crop.foodId || crop.id;
   bag[foodId] = (bag[foodId] || 0) + 1;       // 收获蔬菜放进喂食界面的储物袋
   happy     = Math.min(100, happy + crop.joy);
@@ -4302,6 +4477,7 @@ function renderFarm(nowMs) {
          + '</div>';
   }
   grid.innerHTML = html;
+  updateFarmScore();
 }
 
 /* 打开种子选择器 —— 三个按钮,点哪个就种哪个。
@@ -4346,6 +4522,173 @@ function closeSeedPicker() {
 }
 
 /* 启动种田面板:画菜地 + 起每秒重画的定时器(成长到几分之几一目了然) */
+
+/* ---------- 宠物消消乐 ---------- */
+const MATCH_SIZE = 7;
+const MATCH_START_MOVES = 24;
+const MATCH_PETS = ['cat', 'dog', 'rabbit', 'fox'];
+const MATCH_FOX = '<svg viewBox="0 0 180 150" width="112" height="94" aria-label="狐狸头像"><path d="M28 69 L20 17 L63 43 Q90 31 117 43 L160 17 L152 69 Q161 83 154 106 Q144 139 90 142 Q36 139 26 106 Q19 83 28 69Z" fill="#E9833F" stroke="#B95A2B" stroke-width="4" stroke-linejoin="round"/><path d="M28 69 L20 17 L63 43 Q44 44 28 69Z M152 69 L160 17 L117 43 Q136 44 152 69Z" fill="#F5B47D"/><path d="M33 87 Q45 67 64 77 Q72 88 64 99 Q48 108 33 96Z M147 87 Q135 67 116 77 Q108 88 116 99 Q132 108 147 96Z" fill="#FFF9EF"/><ellipse cx="56" cy="86" rx="5" ry="7" fill="#4A342D"/><ellipse cx="124" cy="86" rx="5" ry="7" fill="#4A342D"/><path d="M76 103 Q90 96 104 103 Q99 116 90 116 Q81 116 76 103Z" fill="#FFF4E8"/><path d="M85 105 Q90 100 95 105 Q90 111 85 105Z" fill="#59382D"/><path d="M90 111 Q84 120 76 116 M90 111 Q96 120 104 116" fill="none" stroke="#65443A" stroke-width="2.5" stroke-linecap="round"/></svg>';
+function matchPetArt(key) { return key === 'fox' ? MATCH_FOX : (PETS[key] ? PETS[key].svg : ''); }
+const MATCH = { board: [], score: 0, moves: MATCH_START_MOVES, combo: 0, selected: -1, active: false, settled: false };
+
+function matchRandomPet() { return MATCH_PETS[Math.floor(Math.random() * MATCH_PETS.length)]; }
+function matchFindRuns(board) {
+  const found = new Set();
+  for (let r = 0; r < MATCH_SIZE; r++) {
+    let start = 0;
+    while (start < MATCH_SIZE) {
+      let end = start + 1;
+      while (end < MATCH_SIZE && board[r][end] === board[r][start]) end++;
+      if (board[r][start] && end - start >= 3) for (let c = start; c < end; c++) found.add(r * MATCH_SIZE + c);
+      start = end;
+    }
+  }
+  for (let c = 0; c < MATCH_SIZE; c++) {
+    let start = 0;
+    while (start < MATCH_SIZE) {
+      let end = start + 1;
+      while (end < MATCH_SIZE && board[end][c] === board[start][c]) end++;
+      if (board[start][c] && end - start >= 3) for (let r = start; r < end; r++) found.add(r * MATCH_SIZE + c);
+      start = end;
+    }
+  }
+  return found;
+}
+function matchMakeBoard() {
+  let board;
+  let attempts = 0;
+  do {
+    board = Array.from({ length: MATCH_SIZE }, () => new Array(MATCH_SIZE).fill(''));
+    for (let r = 0; r < MATCH_SIZE; r++) for (let c = 0; c < MATCH_SIZE; c++) {
+      const choices = MATCH_PETS.filter(function (pet) {
+        return !(c >= 2 && board[r][c - 1] === pet && board[r][c - 2] === pet)
+            && !(r >= 2 && board[r - 1][c] === pet && board[r - 2][c] === pet);
+      });
+      board[r][c] = choices[Math.floor(Math.random() * choices.length)];
+    }
+    attempts++;
+  } while (!matchHasMove(board) && attempts < 100);
+  return board;
+}
+function matchRender() {
+  const el = document.getElementById('matchBoard');
+  if (!el) return;
+  el.innerHTML = MATCH.board.map(function (row, r) {
+    return row.map(function (pet, c) {
+      const idx = r * MATCH_SIZE + c;
+      return '<button type="button" class="match-tile' + (MATCH.selected === idx ? ' selected' : '') + '" data-index="' + idx + '" aria-label="第' + (r + 1) + '行第' + (c + 1) + '列">' + (pet ? matchPetArt(pet) : '') + '</button>';
+    }).join('');
+  }).join('');
+  document.getElementById('matchScore').innerText = MATCH.score;
+  document.getElementById('matchMoves').innerText = MATCH.moves;
+  document.getElementById('matchCombo').innerText = MATCH.combo;
+  document.getElementById('matchRestart').disabled = MATCH.active;
+}
+function matchStart() {
+  MATCH.board = matchMakeBoard();
+  MATCH.score = 0;
+  MATCH.moves = MATCH_START_MOVES;
+  MATCH.combo = 0;
+  MATCH.selected = -1;
+  MATCH.active = true;
+  MATCH.settled = false;
+  document.getElementById('matchStatus').innerText = '交换相邻图案，连成三个或更多即可消除';
+  matchRender();
+}
+function matchAdjacent(a, b) { return Math.abs(Math.floor(a / MATCH_SIZE) - Math.floor(b / MATCH_SIZE)) + Math.abs(a % MATCH_SIZE - b % MATCH_SIZE) === 1; }
+function matchHasMove(board) {
+  for (let r = 0; r < MATCH_SIZE; r++) for (let c = 0; c < MATCH_SIZE; c++) {
+    for (const [dr, dc] of [[0, 1], [1, 0]]) {
+      const nr = r + dr, nc = c + dc;
+      if (nr >= MATCH_SIZE || nc >= MATCH_SIZE) continue;
+      const copy = board.map(row => row.slice());
+      [copy[r][c], copy[nr][nc]] = [copy[nr][nc], copy[r][c]];
+      if (matchFindRuns(copy).size) return true;
+    }
+  }
+  return false;
+}
+function matchReshuffleIfStuck() {
+  if (matchHasMove(MATCH.board)) return;
+  MATCH.board = matchMakeBoard();
+  document.getElementById('matchStatus').innerText = '棋盘已重新排列，继续消除吧';
+}
+function matchResolve() {
+  let runs = matchFindRuns(MATCH.board);
+  if (!runs.size) { matchReshuffleIfStuck(); matchRender(); return; }
+  let chain = 0;
+  while (runs.size && chain < 20) {
+    chain++;
+    MATCH.score += runs.size * 10 * chain;
+    MATCH.combo = Math.max(MATCH.combo, chain);
+    for (let c = 0; c < MATCH_SIZE; c++) {
+      const remaining = [];
+      for (let r = MATCH_SIZE - 1; r >= 0; r--) if (!runs.has(r * MATCH_SIZE + c)) remaining.push(MATCH.board[r][c]);
+      while (remaining.length < MATCH_SIZE) remaining.push(matchRandomPet());
+      for (let r = MATCH_SIZE - 1, i = 0; r >= 0; r--, i++) MATCH.board[r][c] = remaining[i];
+    }
+    runs = matchFindRuns(MATCH.board);
+  }
+  document.getElementById('matchStatus').innerText = chain > 1 ? '太棒了！' + chain + ' 连锁消除' : '消除成功，继续加油';
+  matchReshuffleIfStuck();
+  matchRender();
+  if (MATCH.moves <= 0) matchFinish();
+}
+function matchTap(index) {
+  if (!MATCH.active || MATCH.moves <= 0) return;
+  if (MATCH.selected < 0) { MATCH.selected = index; matchRender(); return; }
+  if (MATCH.selected === index) { MATCH.selected = -1; matchRender(); return; }
+  if (!matchAdjacent(MATCH.selected, index)) { MATCH.selected = index; matchRender(); return; }
+  const a = MATCH.selected, b = index;
+  const ar = Math.floor(a / MATCH_SIZE), ac = a % MATCH_SIZE, br = Math.floor(b / MATCH_SIZE), bc = b % MATCH_SIZE;
+  [MATCH.board[ar][ac], MATCH.board[br][bc]] = [MATCH.board[br][bc], MATCH.board[ar][ac]];
+  MATCH.selected = -1;
+  if (!matchFindRuns(MATCH.board).size) {
+    [MATCH.board[ar][ac], MATCH.board[br][bc]] = [MATCH.board[br][bc], MATCH.board[ar][ac]];
+    document.getElementById('matchStatus').innerText = '这次没有连成三个或更多，换个位置试试';
+    matchRender();
+    return;
+  }
+  MATCH.moves--;
+  MATCH.combo = 0;
+  matchResolve();
+}
+document.addEventListener('click', function (event) {
+  const tile = event.target.closest && event.target.closest('.match-tile');
+  if (tile) matchTap(Number(tile.dataset.index));
+});
+function matchFinish() {
+  if (MATCH.settled) return;
+  MATCH.active = false;
+  MATCH.settled = true;
+  const reward = Math.min(25, 2 + Math.floor(MATCH.score / 180) + Math.min(6, MATCH.combo));
+  const got = gameCoinGain(MATCH.score);
+  const rank = recordGameScore('match', MATCH.score);
+  earnCoins(got);
+  happy = Math.min(100, happy + reward);
+  hunger = Math.max(0, hunger - GAME_HUNGER_COST);
+  updateUI();
+  document.getElementById('matchStatus').innerText = '本局结束 · 第 ' + rank + ' 名 · 心情 +' + reward + ' · 爱心币 +' + got + ' · 饱腹 -' + GAME_HUNGER_COST;
+  showMessage(PETS[currentPet].name + ':消消乐得了' + MATCH.score + '分，心情 +' + reward + '，爱心币 +' + got);
+  matchRender();
+}
+function updateFarmScore() {
+  const el = document.getElementById('farmScore');
+  if (el) el.innerText = farmScore;
+}
+function farmFinishRound() {
+  if (farmScore <= 0) {
+    document.getElementById('farmRoundStatus').innerText = '先收获作物再结束本轮';
+    return;
+  }
+  const score = farmScore;
+  const rank = recordGameScore('farm', score);
+  farmScore = 0;
+  saveGame();
+  updateFarmScore();
+  document.getElementById('farmRoundStatus').innerText = '本轮 ' + score + ' 分 · 本机历史第 ' + rank + ' 名';
+  showMessage(PETS[currentPet].name + ':种田本轮得了' + score + '分，排名第' + rank + '名');
+}
 function farmStart(nowMs) {
   const now = nowMs || Date.now();
   renderFarm(now);
@@ -4355,18 +4698,15 @@ function farmStart(nowMs) {
 
 /* 切换 tab。打方块 ↔ 种田,两边状态都留着 —— 切走只是暂停,切回来恢复 */
 function switchGame(name) {
-  if (name !== 'tetris' && name !== 'farm') return;
-  const tabTetris   = document.getElementById('tabTetris');
-  const tabFarm     = document.getElementById('tabFarm');
-  const panelTetris = document.getElementById('panelTetris');
-  const panelFarm   = document.getElementById('panelFarm');
-  if (tabTetris)   tabTetris.classList.toggle('on',   name === 'tetris');
-  if (tabFarm)     tabFarm.classList.toggle('on',     name === 'farm');
-  if (panelTetris) panelTetris.style.display = (name === 'tetris') ? '' : 'none';
-  if (panelFarm)   panelFarm.style.display   = (name === 'farm')   ? '' : 'none';
+  if (!['tetris', 'farm', 'match'].includes(name)) return;
+  const names = ['tetris', 'farm', 'match'];
+  names.forEach(function (key) {
+    const tab = document.getElementById(key === 'tetris' ? 'tabTetris' : key === 'farm' ? 'tabFarm' : 'tabMatch');
+    const panel = document.getElementById(key === 'tetris' ? 'panelTetris' : key === 'farm' ? 'panelFarm' : 'panelMatch');
+    if (tab) tab.classList.toggle('on', key === name);
+    if (panel) panel.style.display = key === name ? '' : 'none';
+  });
 
-  /* 切走方块 → running=false + cancel rAF,gameLoop 第一行就 return 了,rAF 链彻底断 */
-  /* 切回方块 → 如果原本在跑,重启 rAF;还保留着 bag/score/lines,继续玩 */
   if (name === 'tetris') {
     if (farmTickId) { clearInterval(farmTickId); farmTickId = 0; }
     if (TETRO._wasRunning && !TETRO.running && !TETRO.raf) {
@@ -4375,22 +4715,28 @@ function switchGame(name) {
     }
   } else {
     if (TETRO.running) {
-      TETRO._wasRunning = true;          // 记下「原本在跑」,切回来用
+      TETRO._wasRunning = true;
       TETRO.running = false;
       if (TETRO.raf) { cancelAnimationFrame(TETRO.raf); TETRO.raf = 0; }
-    } else {
-      TETRO._wasRunning = false;
-    }
-    farmStart(Date.now());
+    } else TETRO._wasRunning = false;
+    if (name === 'farm') farmStart(Date.now());
+    else if (farmTickId) { clearInterval(farmTickId); farmTickId = 0; }
   }
 
   lastGameTab = name;
   const title = document.getElementById('gameTitle');
-  if (title) title.innerText = '陪' + PETS[currentPet].name
-    + (name === 'tetris' ? '玩 · 俄罗斯方块' : '种田');
+  if (name === 'match' && !MATCH.active && !MATCH.settled) matchStart();
+  const label = name === 'tetris' ? '俄罗斯方块' : name === 'farm' ? '种田' : '消消乐';
+  if (title) title.innerText = '陪' + PETS[currentPet].name + '玩 · ' + label;
 }
 
 setupCanvas();   // 页面一打开就把画布按屏幕密度设好
 </script>
 </body>
 </html>
+
+
+
+
+
+
